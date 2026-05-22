@@ -4,7 +4,6 @@
 # 1. Load and run MegaDetector on a batch of images.
 # 2. Extract the detected bounding boxes and save cropped images of the detected animals.
 # 3. Load a fine-tuned SpeciesNet model and classify the cropped images.
-
 from pathlib import Path
 from megadetector.detection import run_detector_batch
 import os
