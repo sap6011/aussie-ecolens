@@ -1,13 +1,30 @@
+# OS
 .DS_Store
+
+# Python virtual environments
 wildlife_env/
+api/venv/
+venv/
+
+# Python cache
 __pycache__/
 *.pyc
-.DS_Store
+*.py[cod]
+*$py.class
 *.egg-info/
+
+# Secrets / environment variables
 .env
+api/.env
+
+# Editor
 .vscode/
+
+# Model files (LFS-tracked, don't commit local copies)
 mdv5a.pt
 model.pt
-cropped_images
+
+# Project-specific generated data
+cropped_images/
 mg_detections.json
 tagging_test_crops/

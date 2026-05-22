@@ -23,3 +23,8 @@ Upload:     arn:aws:lambda:us-east-1:301949382976:function:aussie-ecolens-upload
 Table name: aussie-ecolens-files
 Partition key: fileId
 Region: us-east-1
+
+=== API GATEWAY ===
+API Name: aussie-ecolens-api
+API ID:   1gwype1nc4
+Region:   us-east-1

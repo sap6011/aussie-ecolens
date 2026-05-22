@@ -1,0 +1,74 @@
+import { useState } from 'react'
+import './App.css'
+import Login from './pages/Login'
+import Signup from './pages/Signup'
+import Dashboard from './pages/Dashboard'
+import Upload from './pages/Upload'
+import Query from './pages/Query'
+import ManageTags from './pages/ManageTags'
+import Notifications from './pages/Notifications'
+
+const NAV_ITEMS = [
+  { id: 'dashboard', label: 'Dashboard', icon: '⊞', section: 'Main' },
+  { id: 'upload', label: 'Upload', icon: '↑', section: 'Main' },
+  { id: 'query', label: 'Query Files', icon: '⌕', section: 'Search' },
+  { id: 'tags', label: 'Manage Tags', icon: '⊕', section: 'Manage' },
+  { id: 'notifications', label: 'Notifications', icon: '🔔', section: 'Manage' },
+]
+
+export default function App() {
+  const [page, setPage] = useState('login')
+  const [activeTab, setActiveTab] = useState('dashboard')
+  const [user, setUser] = useState(null)
+
+  function handleLogin(userData) {
+    setUser(userData)
+    setPage('app')
+  }
+
+  function handleLogout() {
+    setUser(null)
+    setPage('login')
+  }
+
+  if (page === 'login') return <Login onLogin={handleLogin} onSignup={() => setPage('signup')} />
+  if (page === 'signup') return <Signup onSignup={handleLogin} onLogin={() => setPage('login')} />
+
+  const sections = [...new Set(NAV_ITEMS.map(i => i.section))]
+
+  return (
+    <div className="app">
+      <nav className="nav">
+        <div className="nav-brand">🌿 EcoLens <span>Wildlife Platform</span></div>
+        <div className="nav-user">👤 {user?.email}</div>
+        <button className="nav-btn" onClick={handleLogout}>Sign out</button>
+      </nav>
+      <div className="layout">
+        <aside className="sidebar">
+          {sections.map(section => (
+            <div key={section}>
+              <div className="sidebar-section">{section}</div>
+              {NAV_ITEMS.filter(i => i.section === section).map(item => (
+                <div
+                  key={item.id}
+                  className={`sidebar-item ${activeTab === item.id ? 'active' : ''}`}
+                  onClick={() => setActiveTab(item.id)}
+                >
+                  <span className="sidebar-icon">{item.icon}</span>
+                  {item.label}
+                </div>
+              ))}
+            </div>
+          ))}
+        </aside>
+        <main className="content">
+          {activeTab === 'dashboard' && <Dashboard onUpload={() => setActiveTab('upload')} />}
+          {activeTab === 'upload' && <Upload />}
+          {activeTab === 'query' && <Query />}
+          {activeTab === 'tags' && <ManageTags />}
+          {activeTab === 'notifications' && <Notifications />}
+        </main>
+      </div>
+    </div>
+  )
+}
