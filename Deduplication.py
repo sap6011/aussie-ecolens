@@ -23,7 +23,7 @@ logger.setLevel(logging.INFO)
 # ---------------------------------------------------------------------------
 # DynamoDB config — set these as Lambda environment variables
 # ---------------------------------------------------------------------------
-DYNAMODB_TABLE = os.environ.get("DYNAMODB_TABLE", "wildlife-files")
+DYNAMODB_TABLE = os.environ.get("DYNAMODB_TABLE", "aussie-ecolens-files")
 CHECKSUM_INDEX = os.environ.get("CHECKSUM_INDEX", "checksum-index")  # GSI name
 
 
@@ -116,8 +116,18 @@ def lambda_handler(event, context):
                 "checksum": checksum,
             })
         else:
-            # 4b. New file — pass checksum downstream
+            # 4b. New file — invoke tagger Lambda
             logger.info("New file accepted. Checksum: %s", checksum)
+            lambda_client = boto3.client("lambda")
+            lambda_client.invoke(
+                FunctionName=os.environ.get("TAGGER_FUNCTION", "aussie-ecolens-tagger"),
+                InvocationType="Event",
+                Payload=json.dumps({
+                    "bucket": bucket,
+                    "key": key,
+                    "checksum": checksum
+                })
+            )
             results.append({
                 "status": "accepted",
                 "statusCode": 200,
