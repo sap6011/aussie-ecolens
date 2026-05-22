@@ -28,3 +28,5 @@ Region: us-east-1
 API Name: aussie-ecolens-api
 API ID:   1gwype1nc4
 Region:   us-east-1
+
+Layer ARN: arn:aws:lambda:us-east-1:301949382976:layer:opencv-python-headless:1
