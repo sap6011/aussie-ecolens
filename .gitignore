@@ -1,1 +1,8 @@
 .DS_Store
+wildlife_env/
+__pycache__/
+*.pyc
+.DS_Store
+*.egg-info/
+.env
+.vscode/
