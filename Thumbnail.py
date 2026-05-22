@@ -179,18 +179,31 @@ def lambda_handler(event, context):
 
 
 # ---------------------------------------------------------------------------
-# Local testing (no AWS needed)
+# Local testing — uses test_images/ folder, no internet required
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    import urllib.request
+    from pathlib import Path
+    import sys
 
-    # Download a small test image (public domain wildlife photo)
-    TEST_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/Koala_climbing_tree.jpg/320px-Koala_climbing_tree.jpg"
-    print(f"Downloading test image from Wikipedia...")
-    with urllib.request.urlopen(TEST_URL) as r:
-        image_bytes = r.read()
-    print(f"Downloaded {len(image_bytes):,} bytes")
+    # Find a test image locally — no internet needed
+    candidates = (
+        list(Path("./test_images").glob("*.JPG")) +
+        list(Path("./test_images").glob("*.jpg")) +
+        list(Path("./test_images").glob("*.png")) +
+        list(Path(".").glob("*.jpg")) +
+        list(Path(".").glob("*.JPG"))
+    )
+
+    if not candidates:
+        print("ERROR: No test images found.")
+        print("Place any .jpg image in test_images/ or the current directory.")
+        sys.exit(1)
+
+    test_image = candidates[0]
+    print(f"Using local test image: {test_image}")
+    image_bytes = test_image.read_bytes()
+    print(f"Read {len(image_bytes):,} bytes")
 
     # Test aspect ratio calculation
     w, h = compute_thumbnail_size(1920, 1080, 300, 300)
@@ -204,18 +217,30 @@ if __name__ == "__main__":
     # Test thumbnail generation
     thumb_bytes = generate_thumbnail(image_bytes, max_w=300, max_h=300, quality=85)
     assert len(thumb_bytes) > 0, "Thumbnail should not be empty"
-    assert len(thumb_bytes) < len(image_bytes), "Thumbnail should be smaller than original"
+    assert len(thumb_bytes) < len(image_bytes), "Thumbnail not smaller than original"
     print(f"Thumbnail OK: {len(image_bytes):,} bytes → {len(thumb_bytes):,} bytes")
 
     # Save thumbnail locally so you can visually inspect it
     output_path = "test_thumbnail.jpg"
     with open(output_path, "wb") as f:
         f.write(thumb_bytes)
-    print(f"Saved thumbnail to: {output_path}")
+    print(f"Saved thumbnail to: {output_path} — open it in Finder to confirm")
 
     # Test key derivation
     assert thumbnail_key("uploads/koala.jpg")      == "thumbnails/koala_thumb.jpg"
     assert thumbnail_key("uploads/sub/wombat.png") == "thumbnails/wombat_thumb.jpg"
     print("Key derivation OK")
+
+    # Batch test all images in test_images/
+    all_images = (
+        list(Path("./test_images").glob("*.JPG")) +
+        list(Path("./test_images").glob("*.jpg"))
+    )
+    if len(all_images) > 1:
+        print(f"\nBatch testing all {len(all_images)} images in test_images/...")
+        for img_path in sorted(all_images):
+            raw = img_path.read_bytes()
+            thumb = generate_thumbnail(raw)
+            print(f"  {img_path.name:<45} {len(raw):>8,} B → {len(thumb):>7,} B")
 
     print("\nAll local tests passed.")
