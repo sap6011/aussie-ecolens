@@ -10,3 +10,15 @@ mdv5a.pt
 model.pt
 cropped_images
 mg_detections.json
+
+
+# Python virtual environment
+api/venv/
+venv/
+# Environment variables / secrets
+api/.env
+.env
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class

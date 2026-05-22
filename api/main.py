@@ -1,0 +1,117 @@
+import os
+import boto3
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List, Dict
+from decimal import Decimal
+
+app = FastAPI()
+
+dynamodb = boto3.resource('dynamodb', region_name=os.getenv('AWS_REGION', 'us-east-1'))
+table = dynamodb.Table(os.getenv('DYNAMODB_TABLE', 'media_files'))
+
+# Helper — DynamoDB returns Decimals, JSON can't serialize them
+def fix_decimals(obj):
+    if isinstance(obj, list):
+        return [fix_decimals(i) for i in obj]
+    elif isinstance(obj, dict):
+        return {k: fix_decimals(v) for k, v in obj.items()}
+    elif isinstance(obj, Decimal):
+        return int(obj) if obj % 1 == 0 else float(obj)
+    return obj
+
+# 1. POST /query/tags — AND logic with minimum counts
+class TagQuery(BaseModel):
+    tags: Dict[str, int]
+
+@app.post("/query/tags")
+def query_by_tags(query: TagQuery):
+    response = table.scan()
+    results = []
+    for item in response['Items']:
+        file_tags = item.get('tags', {})
+        if all(int(file_tags.get(tag, 0)) >= count
+               for tag, count in query.tags.items()):
+            results.append({
+                "thumbnail_url": item.get("thumbnail_url"),
+                "original_url": item.get("original_url"),
+                "file_type": item.get("file_type")
+            })
+    return {"results": fix_decimals(results)}
+
+# 2. POST /query/species — at least 1 of the species present
+class SpeciesQuery(BaseModel):
+    species: List[str]
+
+@app.post("/query/species")
+def query_by_species(query: SpeciesQuery):
+    response = table.scan()
+    results = []
+    for item in response['Items']:
+        file_tags = item.get('tags', {})
+        if any(sp in file_tags for sp in query.species):
+            results.append({
+                "original_url": item.get("original_url"),
+                "thumbnail_url": item.get("thumbnail_url"),
+                "file_type": item.get("file_type"),
+                "tags": fix_decimals(file_tags)
+            })
+    return {"results": results}
+
+# 3. POST /query/thumbnail — get full image from thumbnail URL
+class ThumbnailQuery(BaseModel):
+    thumbnail_url: str
+
+@app.post("/query/thumbnail")
+def query_by_thumbnail(query: ThumbnailQuery):
+    response = table.scan(
+        FilterExpression=boto3.dynamodb.conditions.Attr('thumbnail_url').eq(query.thumbnail_url)
+    )
+    if not response['Items']:
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+    return {"original_url": response['Items'][0].get("original_url")}
+
+# 4. POST /tags — add (operation=1) or remove (operation=0) tags
+class TagUpdate(BaseModel):
+    urls: List[str]
+    tags: List[str]
+    operation: int
+
+@app.post("/tags")
+def update_tags(update: TagUpdate):
+    response = table.scan(
+        FilterExpression=boto3.dynamodb.conditions.Attr('original_url').is_in(update.urls)
+    )
+    updated = 0
+    for item in response['Items']:
+        current_tags = item.get('tags', {})
+        if update.operation == 1:
+            for tag in update.tags:
+                current_tags[tag] = int(current_tags.get(tag, 0)) + 1
+        else:
+            for tag in update.tags:
+                current_tags.pop(tag, None)
+        table.update_item(
+            Key={'file_id': item['file_id']},
+            UpdateExpression='SET tags = :t',
+            ExpressionAttributeValues={':t': current_tags}
+        )
+        updated += 1
+    return {"updated": updated}
+
+# 5. DELETE /files — remove from DynamoDB (S3 deletion handled by Lambda)
+class DeleteRequest(BaseModel):
+    urls: List[str]
+
+@app.delete("/files")
+def delete_files(request: DeleteRequest):
+    response = table.scan(
+        FilterExpression=boto3.dynamodb.conditions.Attr('original_url').is_in(request.urls)
+    )
+    if not response['Items']:
+        raise HTTPException(status_code=404, detail="No matching files found")
+    deleted = 0
+    for item in response['Items']:
+        table.delete_item(Key={'file_id': item['file_id']})
+        deleted += 1
+    return {"deleted": deleted}
