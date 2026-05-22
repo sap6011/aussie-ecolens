@@ -1,5 +1,6 @@
 import os
 import boto3
+from mangum import Mangum
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict
@@ -8,7 +9,7 @@ from decimal import Decimal
 app = FastAPI()
 
 dynamodb = boto3.resource('dynamodb', region_name=os.getenv('AWS_REGION', 'us-east-1'))
-table = dynamodb.Table(os.getenv('DYNAMODB_TABLE', 'media_files'))
+table = dynamodb.Table(os.getenv('DYNAMODB_TABLE', 'aussie-ecolens-files'))
 
 # Helper — DynamoDB returns Decimals, JSON can't serialize them
 def fix_decimals(obj):
@@ -115,3 +116,5 @@ def delete_files(request: DeleteRequest):
         table.delete_item(Key={'file_id': item['file_id']})
         deleted += 1
     return {"deleted": deleted}
+
+lambda_handler = Mangum(app)

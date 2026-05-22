@@ -256,7 +256,7 @@ def lambda_handler(event, context):
     load_models(s3_client)
 
     results = []
-    
+
     # Support both S3 events and direct Lambda invoke
     if "Records" in event:
         records = [{"bucket": r["s3"]["bucket"]["name"], "key": r["s3"]["object"]["key"]} for r in event["Records"]]
@@ -334,6 +334,16 @@ def lambda_handler(event, context):
                     "bucket": bucket,
                     "key": key
                 })
+            )
+
+        # Send SNS notification if tags were detected
+        sns_client = boto3.client("sns")
+        sns_topic_arn = os.environ.get("SNS_TOPIC_ARN")
+        if sns_topic_arn and tags:
+            sns_client.publish(
+                TopicArn=sns_topic_arn,
+                Subject=f"New wildlife detected in {Path(key).name}",
+                Message=f"Species detected: {json.dumps(tags)}\nFile URL: {file_url}"
             )
 
         results.append({
