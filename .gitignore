@@ -8,3 +8,5 @@ __pycache__/
 .vscode/
 mdv5a.pt
 model.pt
+cropped_images
+mg_detections.json
