@@ -16,20 +16,27 @@ const NAV_ITEMS = [
   { id: 'notifications', label: 'Notifications', icon: '🔔', section: 'Manage' },
 ]
 
-export default function App() {
-  const [page, setPage] = useState('login')
-  const [activeTab, setActiveTab] = useState('dashboard')
-  const [user, setUser] = useState(null)
+export default function App() 
+{
+  const [page, setPage] = useState(() => localStorage.getItem('token') ? 'app' : 'login')
+const [activeTab, setActiveTab] = useState('dashboard')
+const [user, setUser] = useState(() => {
+  const token = localStorage.getItem('token')
+  return token ? { email: localStorage.getItem('userEmail') || 'User' } : null
+})
 
   function handleLogin(userData) {
-    setUser(userData)
-    setPage('app')
-  }
+  setUser(userData)
+  localStorage.setItem('userEmail', userData.email)
+  setPage('app')
+}
 
   function handleLogout() {
-    setUser(null)
-    setPage('login')
-  }
+  setUser(null)
+  localStorage.removeItem('token')
+  localStorage.removeItem('userEmail')
+  setPage('login')
+}
 
   if (page === 'login') return <Login onLogin={handleLogin} onSignup={() => setPage('signup')} />
   if (page === 'signup') return <Signup onSignup={handleLogin} onLogin={() => setPage('login')} />
