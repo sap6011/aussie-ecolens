@@ -1,0 +1,31 @@
+AWS Lambda vs Cloud Run
+AWS Lambda:
+
+Runs a single function when called
+No server at all — just a function
+Best for: API endpoints, processing tasks
+Scales to zero automatically
+
+GCP Cloud Run:
+
+Runs a container (like a mini server)
+Can run any app — web servers, APIs, anything
+Best for: web apps, APIs, anything needing a server
+Also scales to zero automatically
+
+
+Analogy
+Lambda = a single worker who does ONE task when called
+Cloud Run = a full employee who can handle MANY tasks
+
+In Our Case
+We're using Cloud Run to host the React frontend because:
+
+React needs a web server (nginx) to serve files
+Cloud Run runs our nginx container
+When a user visits the URL → Cloud Run starts the container → nginx serves the React app
+
+
+Both are "Serverless"
+You don't manage any servers for either — AWS/GCP handle all the infrastructure. That's why both count as serverless compute for the assignment! ✅
+Go ahead and create the Dockerfile!
