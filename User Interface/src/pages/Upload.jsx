@@ -17,19 +17,30 @@ export default function Upload() {
     if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0])
   }
 
-  async function handleUpload() {
+async function handleUpload() {
     if (!file) return
     setLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const formData = new FormData()
-      formData.append('file', file)
+
+      // Step 1 — Get presigned URL from Lambda
       const res = await fetch(`${API}/upload`, {
         method: 'POST',
-        headers: { 'Authorization': token },
-        body: formData
+        headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: file.name,
+          content_type: file.type
+        })
       })
-      if (!res.ok) throw new Error('Upload failed')
+      const { upload_url } = await res.json()
+
+      // Step 2 — Upload file directly to S3
+      await fetch(upload_url, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file
+      })
+
       setFile(null)
       setSuccess(true)
       setTimeout(() => setSuccess(false), 4000)
