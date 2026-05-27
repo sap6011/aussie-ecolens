@@ -47,15 +47,15 @@ export default function Query() {
           body: JSON.stringify({ tags: parsed })
         })
       } else if (activeTab === 'url') {
-        res = await fetch(`${API}/query/thumbnail`, {
+        res = await fetch('https://query-thumbnail-776210689330.us-central1.run.app', {
           method: 'POST',
-          headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ thumbnail_url: inputs.url })
         })
       } else if (activeTab === 'file') {
         const formData = new FormData()
         formData.append('file', inputs.file)
-        res = await fetch(`${API}/query/tags`, {
+        res = await fetch(`${API}/query/file`, {
           method: 'POST',
           headers: { 'Authorization': token },
           body: formData

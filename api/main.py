@@ -1,10 +1,13 @@
 import os
 import boto3
+import hashlib
+import tempfile
 from mangum import Mangum
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, UploadFile
 from pydantic import BaseModel
 from typing import List, Dict
 from decimal import Decimal
+from pathlib import Path
 
 app = FastAPI()
 
@@ -100,7 +103,7 @@ def update_tags(update: TagUpdate):
         updated += 1
     return {"updated": updated}
 
-# 5. DELETE /files — remove from DynamoDB (S3 deletion handled by Lambda)
+# 5. DELETE /files - remove from DynamoDB (S3 deletion handled by Lambda)
 class DeleteRequest(BaseModel):
     urls: List[str]
 
@@ -117,4 +120,25 @@ def delete_files(request: DeleteRequest):
         deleted += 1
     return {"deleted": deleted}
 
+# 6. POST /query/file — find matching files by uploading a sample file
+@app.post("/query/file")
+async def query_by_file(file: UploadFile = File(...)):
+    contents = await file.read()
+    try:
+        checksum = hashlib.sha256(contents).hexdigest()
+        response = table.scan(
+            FilterExpression=boto3.dynamodb.conditions.Attr('checksum').eq(checksum)
+        )
+        if response['Items']:
+            results = [{
+                "thumbnail_url": item.get("thumbnail_url"),
+                "file_url": item.get("file_url"),
+                "file_type": item.get("file_type"),
+                "tags": fix_decimals(item.get("tags", {}))
+            } for item in response['Items']]
+            return {"results": results, "match_type": "exact"}
+        return {"results": [], "match_type": "none", "message": "No matching files found"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
 lambda_handler = Mangum(app)
