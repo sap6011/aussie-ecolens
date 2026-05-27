@@ -26,7 +26,7 @@ async function handleUpload() {
       // Step 1 — Get presigned URL from Lambda
       const res = await fetch(`${API}/upload`, {
         method: 'POST',
-        headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           filename: file.name,
           content_type: file.type

@@ -19,7 +19,7 @@ export default function ManageTags() {
       const token = localStorage.getItem('token')
       const res = await fetch(`${API}/query/species`, {
         method: 'POST',
-        headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ species: [''] })
       })
       const data = await res.json()

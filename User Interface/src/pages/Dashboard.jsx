@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-const API = 'https://1gwype1nc4.execute-api.us-east-1.amazonaws.com/prod'
+const API = VITE_API_URL
 
 export default function Dashboard({ onUpload }) {
   const [stats, setStats] = useState({ total: 0, species: 0, images: 0, videos: 0 })
@@ -16,7 +16,7 @@ export default function Dashboard({ onUpload }) {
       const token = localStorage.getItem('token')
       const res = await fetch(`${API}/query/species`, {
         method: 'POST',
-        headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ species: [''] })
       })
       const data = await res.json()

@@ -32,7 +32,7 @@ export default function Query() {
       if (activeTab === 'species') {
         res = await fetch(`${API}/query/species`, {
           method: 'POST',
-          headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ species: [inputs.species] })
         })
       } else if (activeTab === 'tags') {
@@ -43,7 +43,7 @@ export default function Query() {
         })
         res = await fetch(`${API}/query/tags`, {
           method: 'POST',
-          headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ tags: parsed })
         })
       } else if (activeTab === 'url') {
@@ -57,7 +57,7 @@ export default function Query() {
         formData.append('file', inputs.file)
         res = await fetch(`${API}/query/file`, {
           method: 'POST',
-          headers: { 'Authorization': token },
+          headers: { 'Authorization': `Bearer ${token}` },
           body: formData
         })
       }
