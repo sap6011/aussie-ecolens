@@ -23,8 +23,8 @@ export default function Signup({ onSignup, onLogin }) {
     try {
       const { CognitoUserPool, CognitoUserAttribute } = await import('amazon-cognito-identity-js')
       const userPool = new CognitoUserPool({
-        UserPoolId: 'us-east-1_4xMmuVjWC',
-        ClientId: '5uvau3vaf9vogduhc7rq00mva0'
+        UserPoolId: import.meta.env.VITE_COGNITO_USER_POOL_ID,
+        ClientId: import.meta.env.VITE_COGNITO_CLIENT_ID
       })
       const attributes = [
         new CognitoUserAttribute({ Name: 'given_name', Value: form.firstName }),

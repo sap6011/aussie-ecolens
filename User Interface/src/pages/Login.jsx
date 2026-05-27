@@ -15,8 +15,8 @@ async function handleSubmit(e) {
     const { CognitoUserPool, CognitoUser, AuthenticationDetails } = await import('amazon-cognito-identity-js')
     
     const poolData = {
-      UserPoolId: 'us-east-1_4xMmuVjWC',
-      ClientId: '5uvau3vaf9vogduhc7rq00mva0'
+      UserPoolId: import.meta.env.VITE_COGNITO_USER_POOL_ID,
+      ClientId: import.meta.env.VITE_COGNITO_CLIENT_ID
     }
     const userPool = new CognitoUserPool(poolData)
     const authDetails = new AuthenticationDetails({ Username: email, Password: password })
