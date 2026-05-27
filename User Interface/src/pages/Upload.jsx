@@ -1,8 +1,11 @@
 import { useState, useRef } from 'react'
 
+const API = 'https://1gwype1nc4.execute-api.us-east-1.amazonaws.com/prod'
+
 export default function Upload() {
   const [file, setFile] = useState(null)
   const [success, setSuccess] = useState(false)
+  const [loading, setLoading] = useState(false)
   const inputRef = useRef()
 
   function handleFile(e) {
@@ -14,10 +17,27 @@ export default function Upload() {
     if (e.dataTransfer.files[0]) setFile(e.dataTransfer.files[0])
   }
 
-  function handleUpload() {
-    setFile(null)
-    setSuccess(true)
-    setTimeout(() => setSuccess(false), 4000)
+  async function handleUpload() {
+    if (!file) return
+    setLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch(`${API}/upload`, {
+        method: 'POST',
+        headers: { 'Authorization': token },
+        body: formData
+      })
+      if (!res.ok) throw new Error('Upload failed')
+      setFile(null)
+      setSuccess(true)
+      setTimeout(() => setSuccess(false), 4000)
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const isVideo = file?.type?.startsWith('video')
@@ -58,7 +78,9 @@ export default function Upload() {
             <div style={{ fontSize: 13, fontWeight: 500 }}>{file.name}</div>
             <div style={{ fontSize: 11, color: 'var(--eco-muted)' }}>{(file.size / 1024 / 1024).toFixed(2)} MB</div>
           </div>
-          <button className="btn-add" onClick={handleUpload}>Upload</button>
+          <button className="btn-add" onClick={handleUpload} disabled={loading}>
+            {loading ? 'Uploading...' : 'Upload'}
+          </button>
         </div>
       )}
 

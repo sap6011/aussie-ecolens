@@ -1,31 +1,45 @@
 import { useState } from 'react'
 
-const INITIAL_SPECIES = [
-  { id: 1, name: 'Koala', emoji: '🐨', enabled: true },
-  { id: 2, name: 'Kangaroo', emoji: '🦘', enabled: true },
-  { id: 3, name: 'Dingo', emoji: '🦊', enabled: false },
-]
+const API = 'https://1gwype1nc4.execute-api.us-east-1.amazonaws.com/prod'
 
 const EMOJI_MAP = { koala:'🐨', kangaroo:'🦘', wombat:'🦡', dingo:'🦊', platypus:'🦆', echidna:'🦔', cockatoo:'🦜', kookaburra:'🐦', magpie:'🐦', possum:'🐭' }
 
 export default function Notifications() {
-  const [species, setSpecies] = useState(INITIAL_SPECIES)
-  const [prefs, setPrefs] = useState({ digest: false, tagUpdates: true })
+  const [species, setSpecies] = useState([])
   const [newSpecies, setNewSpecies] = useState('')
+  const [email, setEmail] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [alert, setAlert] = useState('')
 
-  function toggleSpecies(id) {
-    setSpecies(s => s.map(x => x.id === id ? { ...x, enabled: !x.enabled } : x))
-  }
-
-  function togglePref(key) {
-    setPrefs(p => ({ ...p, [key]: !p[key] }))
+  async function subscribe(speciesName) {
+    if (!email) {
+      setAlert('Please enter your email first!')
+      setTimeout(() => setAlert(''), 3000)
+      return
+    }
+    setLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API}/notify`, {
+        method: 'POST',
+        headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, species: speciesName })
+      })
+      if (!res.ok) throw new Error('Failed to subscribe')
+      setAlert(`✅ Subscribed to notifications for ${speciesName}!`)
+      setTimeout(() => setAlert(''), 3000)
+    } catch (err) {
+      setAlert(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   function addSpecies() {
     const name = newSpecies.trim()
     if (!name) return
     const emoji = EMOJI_MAP[name.toLowerCase()] || '🐾'
-    setSpecies(s => [...s, { id: Date.now(), name: name.charAt(0).toUpperCase() + name.slice(1), emoji, enabled: true }])
+    setSpecies(s => [...s, { id: Date.now(), name: name.charAt(0).toUpperCase() + name.slice(1), emoji }])
     setNewSpecies('')
   }
 
@@ -40,6 +54,20 @@ export default function Notifications() {
         ℹ️ Notifications are sent via AWS SNS to your registered email address.
       </div>
 
+      {alert && <div className="alert alert-success">{alert}</div>}
+
+      <div className="notif-card">
+        <div className="notif-card-title">Your email</div>
+        <div className="bulk-row">
+          <input
+            placeholder="Enter your email to receive notifications"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            type="email"
+          />
+        </div>
+      </div>
+
       <div className="notif-card">
         <div className="notif-card-title">Watched species</div>
         {species.map(s => (
@@ -48,7 +76,9 @@ export default function Notifications() {
               <div className="notif-title">{s.emoji} {s.name}</div>
               <div className="notif-desc">Notify when new {s.name.toLowerCase()} files are uploaded</div>
             </div>
-            <button className={`toggle ${s.enabled ? 'on' : ''}`} onClick={() => toggleSpecies(s.id)} aria-label="toggle" />
+            <button className="btn-add" onClick={() => subscribe(s.name)} disabled={loading}>
+              Subscribe
+            </button>
           </div>
         ))}
         <div className="add-notif">
@@ -60,24 +90,6 @@ export default function Notifications() {
             onKeyDown={e => e.key === 'Enter' && addSpecies()}
           />
           <button className="btn-add" onClick={addSpecies}>+ Add</button>
-        </div>
-      </div>
-
-      <div className="notif-card">
-        <div className="notif-card-title">Notification preferences</div>
-        <div className="notif-row">
-          <div className="notif-info">
-            <div className="notif-title">Email digest</div>
-            <div className="notif-desc">Receive a daily summary instead of instant alerts</div>
-          </div>
-          <button className={`toggle ${prefs.digest ? 'on' : ''}`} onClick={() => togglePref('digest')} aria-label="toggle" />
-        </div>
-        <div className="notif-row">
-          <div className="notif-info">
-            <div className="notif-title">Tag updates</div>
-            <div className="notif-desc">Notify when tags are manually changed on your files</div>
-          </div>
-          <button className={`toggle ${prefs.tagUpdates ? 'on' : ''}`} onClick={() => togglePref('tagUpdates')} aria-label="toggle" />
         </div>
       </div>
     </div>

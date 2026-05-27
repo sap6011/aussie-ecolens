@@ -1,10 +1,6 @@
 import { useState, useRef } from 'react'
 
-const SAMPLE_RESULTS = [
-  { name: 'DSC_0412.jpg', emoji: '🦘', tags: ['kangaroo', 'eucalyptus'] },
-  { name: 'koala_tree.jpg', emoji: '🐨', tags: ['koala'] },
-  { name: 'dingo_sunset.jpg', emoji: '🦊', tags: ['dingo'] },
-]
+const API = 'https://1gwype1nc4.execute-api.us-east-1.amazonaws.com/prod'
 
 const TABS = [
   { id: 'species', label: 'By species' },
@@ -15,16 +11,64 @@ const TABS = [
 
 export default function Query() {
   const [activeTab, setActiveTab] = useState('species')
-  const [results, setResults] = useState(SAMPLE_RESULTS)
-  const [inputs, setInputs] = useState({ species: '', tags: '', url: '', file: '' })
+  const [results, setResults] = useState([])
+  const [inputs, setInputs] = useState({ species: '', tags: '', url: '', file: null })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const fileRef = useRef()
 
   function setInput(key, val) {
     setInputs(i => ({ ...i, [key]: val }))
   }
 
-  function runQuery() {
-    setResults(SAMPLE_RESULTS)
+  async function runQuery() {
+    setLoading(true)
+    setError('')
+    setResults([])
+    const token = localStorage.getItem('token')
+    try {
+      let res, body
+
+      if (activeTab === 'species') {
+        res = await fetch(`${API}/query/species`, {
+          method: 'POST',
+          headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ species: [inputs.species] })
+        })
+      } else if (activeTab === 'tags') {
+        const parsed = {}
+        inputs.tags.split(',').forEach(t => {
+          const [k, v] = t.trim().split(':')
+          if (k) parsed[k.trim()] = parseInt(v) || 1
+        })
+        res = await fetch(`${API}/query/tags`, {
+          method: 'POST',
+          headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tags: parsed })
+        })
+      } else if (activeTab === 'url') {
+        res = await fetch(`${API}/query/thumbnail`, {
+          method: 'POST',
+          headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ thumbnail_url: inputs.url })
+        })
+      } else if (activeTab === 'file') {
+        const formData = new FormData()
+        formData.append('file', inputs.file)
+        res = await fetch(`${API}/query/tags`, {
+          method: 'POST',
+          headers: { 'Authorization': token },
+          body: formData
+        })
+      }
+
+      body = await res.json()
+      setResults(body.results || [body] || [])
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -48,59 +92,66 @@ export default function Query() {
             <div className="query-hint">Enter a species name to find all files containing it</div>
             <div className="query-row">
               <input className="query-input" placeholder="e.g. dingo" value={inputs.species} onChange={e => setInput('species', e.target.value)} />
-              <button className="btn-search" onClick={runQuery}>🔍 Search</button>
             </div>
           </>
         )}
 
         {activeTab === 'tags' && (
           <>
-            <div className="query-hint">Specify species with minimum counts (AND logic). e.g. <code>koala:3, wombat:2</code></div>
+            <div className="query-hint">Enter tags with counts e.g. kangaroo:2, wombat:1</div>
             <div className="query-row">
-              <input className="query-input" placeholder="koala:3, wombat:2" value={inputs.tags} onChange={e => setInput('tags', e.target.value)} />
-              <button className="btn-search" onClick={runQuery}>🔍 Search</button>
+              <input className="query-input" placeholder="e.g. kangaroo:2, wombat:1" value={inputs.tags} onChange={e => setInput('tags', e.target.value)} />
             </div>
           </>
         )}
 
         {activeTab === 'url' && (
           <>
-            <div className="query-hint">Paste a thumbnail URL to find the full-size image</div>
+            <div className="query-hint">Enter a thumbnail URL to get the full image</div>
             <div className="query-row">
-              <input className="query-input" placeholder="https://storage.../thumbs/koala_thumb.jpg" value={inputs.url} onChange={e => setInput('url', e.target.value)} />
-              <button className="btn-search" onClick={runQuery}>🔍 Search</button>
+              <input className="query-input" placeholder="https://storage.googleapis.com/..." value={inputs.url} onChange={e => setInput('url', e.target.value)} />
             </div>
           </>
         )}
 
         {activeTab === 'file' && (
           <>
-            <div className="query-hint">Upload a file — EcoLens detects its species and finds all matching files</div>
+            <div className="query-hint">Upload a file to find similar tagged files</div>
             <div className="query-row">
-              <input className="query-input" placeholder="Click to select a file..." value={inputs.file} readOnly onClick={() => fileRef.current.click()} style={{ cursor: 'pointer' }} />
-              <input ref={fileRef} type="file" accept="image/*,video/*" style={{ display: 'none' }} onChange={e => setInput('file', e.target.files[0]?.name || '')} />
-              <button className="btn-search" onClick={runQuery}>🔍 Search</button>
+              <button className="btn-add" onClick={() => fileRef.current.click()}>
+                {inputs.file ? inputs.file.name : 'Choose file'}
+              </button>
+              <input ref={fileRef} type="file" accept="image/*,video/*" style={{ display: 'none' }} onChange={e => setInput('file', e.target.files[0])} />
             </div>
           </>
         )}
+
+        {error && <div className="alert alert-error">{error}</div>}
+        <button className="btn-primary" onClick={runQuery} disabled={loading}>
+          {loading ? 'Searching...' : 'Search'}
+        </button>
       </div>
 
-      <div className="section-title">Results ({results.length} found)</div>
-      <div className="results-grid">
-        {results.map(r => (
-          <div className="result-card" key={r.name}>
-            <div className="result-img">{r.emoji}</div>
-            <div className="result-body">
-              <div className="result-name">{r.name}</div>
-              <div>{r.tags.map(t => <span key={t} className="tag-pill">{t}</span>)}</div>
-              <div className="result-actions">
-                <button className="btn-sm">⛶ Full size</button>
-                <button className="btn-danger">🗑</button>
+      {results.length > 0 && (
+        <div>
+          <div className="section-title">{results.length} result(s) found</div>
+          <div className="results-grid">
+            {results.map((r, i) => (
+              <div key={i} className="result-card">
+                {r.thumbnail_url && (
+                  <img src={r.thumbnail_url} alt="thumbnail" style={{ width: '100%', borderRadius: 6 }} />
+                )}
+                <div style={{ padding: 8 }}>
+                  <div style={{ fontSize: 12, color: 'var(--eco-muted)' }}>{r.file_type}</div>
+                  <a href={r.original_url || r.file_url} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>
+                    View full file
+                  </a>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
