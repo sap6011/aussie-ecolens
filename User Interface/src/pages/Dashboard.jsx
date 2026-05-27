@@ -1,11 +1,45 @@
-const SAMPLE_FILES = [
-  { name: 'DSC_0412.jpg', emoji: '🦘', type: 'IMAGE', tags: 'kangaroo, eucalyptus' },
-  { name: 'clip_0031.mp4', emoji: '🦜', type: 'VIDEO', tags: 'cockatoo, kookaburra' },
-  { name: 'koala_tree.jpg', emoji: '🐨', type: 'IMAGE', tags: 'koala' },
-  { name: 'dingo_sunset.jpg', emoji: '🦊', type: 'IMAGE', tags: 'dingo' },
-]
+import { useState, useEffect } from 'react'
+
+const API = 'https://1gwype1nc4.execute-api.us-east-1.amazonaws.com/prod'
 
 export default function Dashboard({ onUpload }) {
+  const [stats, setStats] = useState({ total: 0, species: 0, images: 0, videos: 0 })
+  const [recentFiles, setRecentFiles] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadDashboard()
+  }, [])
+
+  async function loadDashboard() {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API}/query/species`, {
+        method: 'POST',
+        headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ species: [''] })
+      })
+      const data = await res.json()
+      const files = data.results || []
+
+      const images = files.filter(f => f.file_type === 'image').length
+      const videos = files.filter(f => f.file_type === 'video').length
+      const allTags = new Set(files.flatMap(f => Object.keys(f.tags || {})))
+
+      setStats({
+        total: files.length,
+        species: allTags.size,
+        images,
+        videos
+      })
+      setRecentFiles(files.slice(0, 4))
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -15,22 +49,22 @@ export default function Dashboard({ onUpload }) {
       <div className="stats-row">
         <div className="stat-card">
           <div className="stat-label">Total Files</div>
-          <div className="stat-value">142</div>
-          <div className="stat-meta">↑ 12 this week</div>
+          <div className="stat-value">{loading ? '...' : stats.total}</div>
+          <div className="stat-meta">In database</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Species Tagged</div>
-          <div className="stat-value">38</div>
+          <div className="stat-value">{loading ? '...' : stats.species}</div>
           <div className="stat-meta">Across all files</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Images</div>
-          <div className="stat-value">118</div>
+          <div className="stat-value">{loading ? '...' : stats.images}</div>
           <div className="stat-meta">Auto-tagged</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Videos</div>
-          <div className="stat-value">24</div>
+          <div className="stat-value">{loading ? '...' : stats.videos}</div>
           <div className="stat-meta">Frame-analysed</div>
         </div>
       </div>
@@ -39,20 +73,29 @@ export default function Dashboard({ onUpload }) {
         Recent uploads
         <a onClick={onUpload}>Upload new →</a>
       </div>
-      <div className="file-grid">
-        {SAMPLE_FILES.map(f => (
-          <div className="file-card" key={f.name}>
-            <div className={`file-thumb ${f.type === 'VIDEO' ? 'video' : ''}`}>
-              {f.emoji}
-              <span className="file-badge">{f.type}</span>
+
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--eco-muted)' }}>Loading...</div>
+      ) : recentFiles.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--eco-muted)' }}>
+          No files yet — upload your first wildlife photo!
+        </div>
+      ) : (
+        <div className="file-grid">
+          {recentFiles.map((f, i) => (
+            <div className="file-card" key={i}>
+              <div className={`file-thumb ${f.file_type === 'video' ? 'video' : ''}`}>
+                {f.file_type === 'video' ? '🎬' : '🖼️'}
+                <span className="file-badge">{f.file_type?.toUpperCase()}</span>
+              </div>
+              <div className="file-info">
+                <div className="file-name">{f.file_url?.split('/').pop() || 'Unknown'}</div>
+                <div className="file-tags">{Object.keys(f.tags || {}).join(', ') || 'No tags'}</div>
+              </div>
             </div>
-            <div className="file-info">
-              <div className="file-name">{f.name}</div>
-              <div className="file-tags">{f.tags}</div>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
