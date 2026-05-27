@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-const API = VITE_API_URL
+const API = import.meta.env.VITE_API_URL
 
 export default function Dashboard({ onUpload }) {
   const [stats, setStats] = useState({ total: 0, species: 0, images: 0, videos: 0 })

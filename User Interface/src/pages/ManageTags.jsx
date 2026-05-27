@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-const API = VITE_API_URL
+const API = import.meta.env.VITE_API_URL
 
 export default function ManageTags() {
   const [files, setFiles] = useState([])
@@ -42,7 +42,7 @@ export default function ManageTags() {
       const token = localStorage.getItem('token')
       const res = await fetch(`${API}/tags`, {
         method: 'POST',
-        headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ urls, tags, operation: parseInt(bulkOp) })
       })
       if (!res.ok) throw new Error('Failed to update tags')
@@ -62,7 +62,7 @@ export default function ManageTags() {
       const token = localStorage.getItem('token')
       await fetch(`${API}/delete`, {
         method: 'DELETE',
-        headers: { 'Authorization': token, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ urls: [url] })
       })
       loadFiles()

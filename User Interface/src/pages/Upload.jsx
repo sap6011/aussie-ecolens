@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 
-const API = VITE_API_URL
+const API = import.meta.env.VITE_API_URL
 
 export default function Upload() {
   const [file, setFile] = useState(null)
