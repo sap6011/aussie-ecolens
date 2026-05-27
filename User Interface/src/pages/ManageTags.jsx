@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-const API = 'https://1gwype1nc4.execute-api.us-east-1.amazonaws.com/prod'
+const API = VITE_API_URL
 
 export default function ManageTags() {
   const [files, setFiles] = useState([])

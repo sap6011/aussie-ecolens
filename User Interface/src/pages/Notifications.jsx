@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-const API = 'https://1gwype1nc4.execute-api.us-east-1.amazonaws.com/prod'
+const API = VITE_API_URL
 
 const EMOJI_MAP = { koala:'🐨', kangaroo:'🦘', wombat:'🦡', dingo:'🦊', platypus:'🦆', echidna:'🦔', cockatoo:'🦜', kookaburra:'🐦', magpie:'🐦', possum:'🐭' }
 
