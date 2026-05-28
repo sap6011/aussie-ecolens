@@ -4,12 +4,22 @@ import hashlib
 import tempfile
 from mangum import Mangum
 from fastapi import FastAPI, HTTPException, File, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict
 from decimal import Decimal
 from pathlib import Path
 
+
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 dynamodb = boto3.resource('dynamodb', region_name=os.getenv('AWS_REGION', 'us-east-1'))
 table = dynamodb.Table(os.getenv('DYNAMODB_TABLE', 'aussie-ecolens-files'))

@@ -69,7 +69,7 @@ const [user, setUser] = useState(() => {
           ))}
         </aside>
         <main className="content">
-          {activeTab === 'dashboard' && <Dashboard onUpload={() => setActiveTab('upload')} />}
+          {activeTab === 'dashboard' && <Dashboard onUpload={() => setActiveTab('upload')} token={localStorage.getItem('token')} />}
           {activeTab === 'upload' && <Upload />}
           {activeTab === 'query' && <Query />}
           {activeTab === 'tags' && <ManageTags />}

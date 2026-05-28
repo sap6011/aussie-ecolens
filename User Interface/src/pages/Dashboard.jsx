@@ -2,14 +2,18 @@ import { useState, useEffect } from 'react'
 
 const API = import.meta.env.VITE_API_URL
 
-export default function Dashboard({ onUpload }) {
+export default function Dashboard({ onUpload, token }) {
   const [stats, setStats] = useState({ total: 0, species: 0, images: 0, videos: 0 })
   const [recentFiles, setRecentFiles] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadDashboard()
-  }, [])
+    if (token) {
+        loadDashboard()
+    } else {
+        setLoading(false)
+    }
+}, [token])
 
   async function loadDashboard() {
     try {
