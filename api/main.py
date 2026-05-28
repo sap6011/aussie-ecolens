@@ -63,9 +63,10 @@ def query_by_species(query: SpeciesQuery):
     results = []
     for item in response['Items']:
         file_tags = item.get('tags', {})
-        if any(sp in file_tags for sp in query.species):
+        # If empty species list, return all files
+        if not query.species or query.species == [''] or any(sp in file_tags for sp in query.species if sp):
             results.append({
-                "original_url": item.get("original_url"),
+                "original_url": item.get("file_url"),
                 "thumbnail_url": item.get("thumbnail_url"),
                 "file_type": item.get("file_type"),
                 "tags": fix_decimals(file_tags)
