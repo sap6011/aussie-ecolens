@@ -9,7 +9,13 @@ from pydantic import BaseModel
 from typing import List, Dict
 from decimal import Decimal
 from pathlib import Path
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
+SNS_TOPIC_ARN = os.environ.get('SNS_TOPIC_ARN')
+dynamodb = boto3.resource('dynamodb', region_name=os.getenv('AWS_REGION', 'us-east-1'))
+table = dynamodb.Table(os.getenv('DYNAMODB_TABLE', 'aussie-ecolens-files'))
 
 app = FastAPI()
 
@@ -21,8 +27,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-dynamodb = boto3.resource('dynamodb', region_name=os.getenv('AWS_REGION', 'us-east-1'))
-table = dynamodb.Table(os.getenv('DYNAMODB_TABLE', 'aussie-ecolens-files'))
+
+
+class SubscribeRequest(BaseModel):
+    email: str
+
+@app.post("/subscribe")
+def subscribe_email(request: SubscribeRequest):
+    sns = boto3.client('sns', region_name=os.getenv('AWS_REGION', 'us-east-1'))
+    logger.info("Subscribing email: %s to topic: %s", request.email, SNS_TOPIC_ARN)
+    try:
+        response = sns.subscribe(
+            TopicArn=SNS_TOPIC_ARN,
+            Protocol='email',
+            Endpoint=request.email
+        )
+        logger.info("SNS subscribe response: %s", response)
+        return {"message": f"Confirmation email sent to {request.email}. Please check your inbox."}
+    except Exception as e:
+        logger.error("SNS subscribe failed: %s", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # Helper — DynamoDB returns Decimals, JSON can't serialize them
 def fix_decimals(obj):
@@ -108,7 +133,7 @@ def update_tags(update: TagUpdate):
             for tag in update.tags:
                 current_tags.pop(tag, None)
         table.update_item(
-            Key={'file_id': item['file_id']},
+            Key={'fileId': item['fileId']},
             UpdateExpression='SET tags = :t',
             ExpressionAttributeValues={':t': current_tags}
         )
@@ -128,7 +153,7 @@ def delete_files(request: DeleteRequest):
         raise HTTPException(status_code=404, detail="No matching files found")
     deleted = 0
     for item in response['Items']:
-        table.delete_item(Key={'file_id': item['file_id']})
+        table.delete_item(Key={'fileId': item['fileId']})
         deleted += 1
     return {"deleted": deleted}
 
