@@ -1,48 +1,45 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect } from "react"
 
-const API = import.meta.env.VITE_API_URL
+const API_BASE = "https://1gwype1nc4.execute-api.us-east-1.amazonaws.com/prod"
 
-export default function Dashboard({ onUpload, token }) {
-  const [stats, setStats] = useState({ total: 0, species: 0, images: 0, videos: 0 })
-  const [recentFiles, setRecentFiles] = useState([])
+export default function Dashboard({ onUpload }) {
+  const [files, setFiles] = useState([])
   const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({ total: 0, images: 0, videos: 0, species: 0 })
 
   useEffect(() => {
-    if (token) {
-        loadDashboard()
-    } else {
-        setLoading(false)
-    }
-}, [token])
-
-  async function loadDashboard() {
-    try {
-      const token = localStorage.getItem('token')
-      const res = await fetch(`${API}/query/species`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ species: [''] })
-      })
-      const data = await res.json()
-      const files = data.results || []
-
-      const images = files.filter(f => f.file_type === 'image').length
-      const videos = files.filter(f => f.file_type === 'video').length
-      const allTags = new Set(files.flatMap(f => Object.keys(f.tags || {})))
-
-      setStats({
-        total: files.length,
-        species: allTags.size,
-        images,
-        videos
-      })
-      setRecentFiles(files.slice(0, 4))
-    } catch (err) {
-      console.error(err)
-    } finally {
+    const token = localStorage.getItem("token")
+    if (!token) {
+      console.log("No token found")
       setLoading(false)
+      return
     }
-  }
+
+    fetch(`${API_BASE}/query/tags`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ tags: {} })
+    })
+      .then(r => {
+        console.log("Response status:", r.status)
+        return r.json()
+      })
+      .then(data => {
+        console.log("API response:", data)
+        const items = data.results || []
+        setFiles(items.slice(0, 8))
+        const images = items.filter(f => !f.file_url?.match(/\.(mp4|mov|avi)$/i)).length
+        const videos = items.length - images
+        const allSpecies = new Set(items.flatMap(f => Object.keys(f.tags || {})))
+
+        setStats({ total: items.length, images, videos, species: allSpecies.size })
+      })
+      .catch(err => console.error("Fetch error:", err))
+      .finally(() => setLoading(false))
+  }, [])
 
   return (
     <div>
@@ -53,23 +50,19 @@ export default function Dashboard({ onUpload, token }) {
       <div className="stats-row">
         <div className="stat-card">
           <div className="stat-label">Total Files</div>
-          <div className="stat-value">{loading ? '...' : stats.total}</div>
-          <div className="stat-meta">In database</div>
+          <div className="stat-value">{stats.total}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Species Tagged</div>
-          <div className="stat-value">{loading ? '...' : stats.species}</div>
-          <div className="stat-meta">Across all files</div>
+          <div className="stat-value">{stats.species}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Images</div>
-          <div className="stat-value">{loading ? '...' : stats.images}</div>
-          <div className="stat-meta">Auto-tagged</div>
+          <div className="stat-value">{stats.images}</div>
         </div>
         <div className="stat-card">
           <div className="stat-label">Videos</div>
-          <div className="stat-value">{loading ? '...' : stats.videos}</div>
-          <div className="stat-meta">Frame-analysed</div>
+          <div className="stat-value">{stats.videos}</div>
         </div>
       </div>
 
@@ -79,25 +72,37 @@ export default function Dashboard({ onUpload, token }) {
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--eco-muted)' }}>Loading...</div>
-      ) : recentFiles.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--eco-muted)' }}>
-          No files yet — upload your first wildlife photo!
-        </div>
+        <p>Loading...</p>
       ) : (
         <div className="file-grid">
-          {recentFiles.map((f, i) => (
-            <div className="file-card" key={i}>
-              <div className={`file-thumb ${f.file_type === 'video' ? 'video' : ''}`}>
-                {f.file_type === 'video' ? '🎬' : '🖼️'}
-                <span className="file-badge">{f.file_type?.toUpperCase()}</span>
+          {files.map(f => {
+            const name = f.thumbnail_url?.split("/").pop()?.replace("_thumb.jpg", ".JPG") || "file"
+            const tags = f.file_type || ""
+            const isVideo = name.match(/\.(mp4|mov|avi)$/i)
+            const thumbSrc = f.thumbnail_url?.startsWith("s3://")
+  ? f.thumbnail_url.replace(
+      /^s3:\/\/aussie-ecolens-media-169\/thumbnails\//,
+      "https://storage.googleapis.com/aussie-ecolens-thumbnails/thumbnails/"
+    )
+  : f.thumbnail_url
+            return (
+              <div className="file-card" key={f.file_url || f.fileId}>
+                <div className={`file-thumb ${isVideo ? "video" : ""}`}>
+                  {thumbSrc ? (
+                    <img src={thumbSrc} alt={name}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "8px" }} />
+                  ) : (
+                    isVideo ? "🎬" : "🖼️"
+                  )}
+                  <span className="file-badge">{isVideo ? "VIDEO" : "IMAGE"}</span>
+                </div>
+                <div className="file-info">
+                  <div className="file-name">{name}</div>
+                  <div className="file-tags">{tags || "No tags yet"}</div>
+                </div>
               </div>
-              <div className="file-info">
-                <div className="file-name">{f.file_url?.split('/').pop() || 'Unknown'}</div>
-                <div className="file-tags">{Object.keys(f.tags || {}).join(', ') || 'No tags'}</div>
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

@@ -48,8 +48,9 @@ def query_by_tags(query: TagQuery):
                for tag, count in query.tags.items()):
             results.append({
                 "thumbnail_url": item.get("thumbnail_url"),
-                "original_url": item.get("original_url"),
-                "file_type": item.get("file_type")
+                "original_url": item.get("file_url"),
+                "file_type": item.get("file_type"),
+                "tags": fix_decimals(item.get("tags", {}))
             })
     return {"results": fix_decimals(results)}
 
