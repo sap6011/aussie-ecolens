@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 
-const API_BASE = "https://1gwype1nc4.execute-api.us-east-1.amazonaws.com/prod"
+const API_BASE = "https://pntbrvdq00.execute-api.ap-southeast-2.amazonaws.com/prod"
 
 const TABS = [
   { id: 'species', label: 'By species' },
