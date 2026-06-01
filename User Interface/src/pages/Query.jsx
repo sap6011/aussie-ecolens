@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 
-const API_BASE = "https://pntbrvdq00.execute-api.ap-southeast-2.amazonaws.com/prod"
+const API = import.meta.env.VITE_API_URL
 
 const TABS = [
   { id: 'species', label: 'By species' },

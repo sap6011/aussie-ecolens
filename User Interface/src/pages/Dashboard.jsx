@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 
-const API_BASE = "https://1gwype1nc4.execute-api.us-east-1.amazonaws.com/prod"
+const API_BASE = import.meta.env.VITE_API_URL
 
 export default function Dashboard({ onUpload }) {
   const [files, setFiles] = useState([])
