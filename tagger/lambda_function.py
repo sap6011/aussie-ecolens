@@ -198,6 +198,8 @@ def lambda_handler(event, context):
     else:
         records = [{"bucket": event.get("bucket"), "key": event.get("key")}]
 
+    user_id = event.get("user_id", "unknown")
+
     for record in records:
         bucket = record["bucket"]
         key    = record["key"]
@@ -244,6 +246,7 @@ def lambda_handler(event, context):
             "checksum"     : checksum,
             "tags"         : tags,
             "created_at"   : datetime.now(timezone.utc).isoformat(),
+            "userId"       : user_id,
         }
 
         table.put_item(Item=item)
@@ -258,10 +261,19 @@ def lambda_handler(event, context):
 
         sns_topic_arn = os.environ.get("SNS_TOPIC_ARN")
         if sns_topic_arn and tags:
+            gcp_bucket = os.environ.get("GCP_BUCKET_NAME", "aussie-ecolens-thumbnails")
+            gcs_thumb = (
+                f"https://storage.googleapis.com/{gcp_bucket}/thumbnails/{Path(key).stem}_thumb.jpg"
+                if is_image else "N/A"
+            )
             boto3.client("sns").publish(
                 TopicArn=sns_topic_arn,
                 Subject=f"New wildlife detected in {Path(key).name}",
-                Message=f"Species detected: {json.dumps(tags)}\nFile URL: {file_url}"
+                Message=(
+                    f"Species detected: {json.dumps(tags)}\n"
+                    f"File: {Path(key).name}\n"
+                    f"Thumbnail: {gcs_thumb}"
+                )
             )
 
         results.append({"file_url": file_url, "file_type": file_type, "tags": tags})

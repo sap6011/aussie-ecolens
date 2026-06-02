@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 
 const API_BASE = import.meta.env.VITE_API_URL
+const GCP_QUERY_URL = "https://query-thumbnail-776210689330.us-central1.run.app"
 
 const TABS = [
   { id: 'species', label: 'By species' },
@@ -54,7 +55,6 @@ export default function Query() {
         setResults(data.results || [])
 
       } else if (activeTab === 'tags') {
-        // parse "koala:3, wombat:2" into { koala: 3, wombat: 2 }
         const tagMap = {}
         inputs.tags.split(",").forEach(part => {
           const [k, v] = part.trim().split(":")
@@ -69,7 +69,9 @@ export default function Query() {
         setResults(data.results || [])
 
       } else if (activeTab === 'url') {
-        res = await fetch(`${API_BASE}/query/thumbnail`, {
+        // Cross-cloud auth: request goes to GCP Cloud Run, which validates
+        // the Cognito JWT itself before querying AWS DynamoDB
+        res = await fetch(`${GCP_QUERY_URL}/query/thumbnail`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
           body: JSON.stringify({ thumbnail_url: inputs.url.trim() })
