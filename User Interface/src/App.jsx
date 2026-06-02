@@ -19,7 +19,7 @@ const NAV_ITEMS = [
 export default function App() 
 {
   const [page, setPage] = useState(() => localStorage.getItem('token') ? 'app' : 'login')
-const [activeTab, setActiveTab] = useState('dashboard')
+const [activeTab, setActiveTab] = useState(() => localStorage.getItem('activeTab') || 'dashboard')
 const [user, setUser] = useState(() => {
   const token = localStorage.getItem('token')
   return token ? { email: localStorage.getItem('userEmail') || 'User' } : null
@@ -30,7 +30,10 @@ const [user, setUser] = useState(() => {
   localStorage.setItem('userEmail', userData.email)
   setPage('app')
 }
-
+function handleTabChange(tabId) {
+  setActiveTab(tabId)
+  localStorage.setItem('activeTab', tabId)
+}
   function handleLogout() {
   setUser(null)
   localStorage.removeItem('token')
@@ -46,8 +49,8 @@ const [user, setUser] = useState(() => {
   return (
     <div className="app">
       <nav className="nav">
-        <div className="nav-brand">🌿 EcoLens <span>Wildlife Platform</span></div>
-        <div className="nav-user">👤 {user?.email}</div>
+        <div className="nav-brand"> EcoLens <span>Wildlife Platform</span></div>
+        <div className="nav-user">{user?.email}</div>
         <button className="nav-btn" onClick={handleLogout}>Sign out</button>
       </nav>
       <div className="layout">
@@ -59,7 +62,7 @@ const [user, setUser] = useState(() => {
                 <div
                   key={item.id}
                   className={`sidebar-item ${activeTab === item.id ? 'active' : ''}`}
-                  onClick={() => setActiveTab(item.id)}
+                  onClick={() => handleTabChange(item.id)}
                 >
                   <span className="sidebar-icon">{item.icon}</span>
                   {item.label}
@@ -69,7 +72,7 @@ const [user, setUser] = useState(() => {
           ))}
         </aside>
         <main className="content">
-          {activeTab === 'dashboard' && <Dashboard onUpload={() => setActiveTab('upload')} token={localStorage.getItem('token')} />}
+          {activeTab === 'dashboard' && <Dashboard onUpload={() => handleTabChange('upload')} token={localStorage.getItem('token')} />}
           {activeTab === 'upload' && <Upload />}
           {activeTab === 'query' && <Query />}
           {activeTab === 'tags' && <ManageTags />}
