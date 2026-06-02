@@ -193,7 +193,7 @@ class DeleteRequest(BaseModel):
 @app.delete("/delete")
 def delete_files(request: DeleteRequest, authorization: Optional[str] = Header(None)):
     user_id = get_user_id_from_token(authorization)
-    s3_client = boto3.client('s3', region_name=os.getenv('AWS_REGION', 'us-east-1'))
+    s3_client = boto3.client('s3', region_name=os.getenv('AWS_REGION', 'ap-southeast-2'))
 
     response = table.scan(
         FilterExpression=boto3.dynamodb.conditions.Attr('file_url').is_in(request.urls)
@@ -231,26 +231,76 @@ def delete_files(request: DeleteRequest, authorization: Optional[str] = Header(N
 async def query_by_file(file: UploadFile = File(...), authorization: Optional[str] = Header(None)):
     user_id = get_user_id_from_token(authorization)
     contents = await file.read()
+
     try:
-        checksum = hashlib.sha256(contents).hexdigest()
-        response = table.scan(
-            FilterExpression=boto3.dynamodb.conditions.Attr('checksum').eq(checksum)
+        # Step 1 — upload to a temp S3 key that won't be indexed
+        s3_client = boto3.client('s3', region_name=os.getenv('AWS_REGION', 'ap-southeast-2'))
+        media_bucket = os.getenv('BUCKET_NAME', 'aussie-ecolens-media-940')
+        tmp_key = f"query-tmp/{file.filename}"
+
+        import tempfile as _tempfile
+        suffix = Path(file.filename).suffix.lower()
+        with _tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(contents)
+            tmp_path = tmp.name
+
+        s3_client.upload_file(tmp_path, media_bucket, tmp_key)
+        os.unlink(tmp_path)
+        logger.info("Uploaded query file to s3://%s/%s", media_bucket, tmp_key)
+
+        # Step 2 — invoke tagger Lambda synchronously with query_only=True
+        # This runs ML tagging but skips DynamoDB save, thumbnail, and SNS
+        lambda_client = boto3.client('lambda', region_name=os.getenv('AWS_REGION', 'ap-southeast-2'))
+        invoke_response = lambda_client.invoke(
+            FunctionName=os.getenv('TAGGER_FUNCTION', 'aussie-ecolens-tagger'),
+            InvocationType='RequestResponse',
+            Payload=json.dumps({
+                'bucket': media_bucket,
+                'key': tmp_key,
+                'query_only': True
+            })
         )
-        if response['Items']:
-            results = []
-            for item in response['Items']:
-                if user_id and item.get('userId') and item.get('userId') != user_id:
-                    continue
+        payload = json.loads(invoke_response['Payload'].read())
+        body = json.loads(payload.get('body', '[]'))
+
+        # Step 3 — delete the temp file from S3 immediately (not permanently stored)
+        s3_client.delete_object(Bucket=media_bucket, Key=tmp_key)
+        logger.info("Deleted temp query file from S3")
+
+        if not body or not body[0].get('tags'):
+            return {
+                "results": [],
+                "match_type": "none",
+                "message": "No species detected in uploaded file"
+            }
+
+        detected_tags = body[0]['tags']
+        logger.info("Tags detected in query file: %s", detected_tags)
+
+        # Step 4 — find all DB files containing ANY of the detected species
+        scan_response = table.scan()
+        results = []
+        for item in scan_response['Items']:
+            if user_id and item.get('userId') and item.get('userId') != user_id:
+                continue
+            file_tags = item.get('tags', {})
+            if any(sp in file_tags for sp in detected_tags):
                 results.append({
                     "thumbnail_url": item.get("thumbnail_url"),
                     "file_url": item.get("file_url"),
                     "file_type": item.get("file_type"),
-                    "tags": fix_decimals(item.get("tags", {}))
+                    "tags": fix_decimals(file_tags)
                 })
-            if results:
-                return {"results": results, "match_type": "exact"}
-        return {"results": [], "match_type": "none", "message": "No matching files found"}
+
+        return {
+            "results": results,
+            "match_type": "tag-based",
+            "detected_tags": detected_tags
+        }
+
     except Exception as e:
+        logger.error("query_by_file error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
 
 lambda_handler = Mangum(app)

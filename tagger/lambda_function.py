@@ -65,7 +65,6 @@ def _download_if_missing(s3_client, bucket, key, dest):
 def load_models(s3_client):
     global _speciesnet_model, _device, _torch, _transforms, _np
 
-    # Lazy import heavy libraries
     import torch
     import torchvision.transforms as transforms
     import numpy as np
@@ -198,7 +197,8 @@ def lambda_handler(event, context):
     else:
         records = [{"bucket": event.get("bucket"), "key": event.get("key")}]
 
-    user_id = event.get("user_id", "unknown")
+    user_id    = event.get("user_id", "unknown")
+    query_only = event.get("query_only", False)  # ← NEW: skip save/thumbnail/SNS when True
 
     for record in records:
         bucket = record["bucket"]
@@ -238,8 +238,15 @@ def lambda_handler(event, context):
         file_url  = f"s3://{bucket}/{key}"
         thumb_url = thumbnail_url_for(bucket, key) if is_image else None
 
+        # ── query_only: return tags without persisting anything ──────────────
+        if query_only:
+            logger.info("query_only=True — skipping DynamoDB/thumbnail/SNS for %s", key)
+            results.append({"file_url": file_url, "file_type": file_type, "tags": tags})
+            continue
+        # ─────────────────────────────────────────────────────────────────────
+
         item = {
-            "fileId"      : key,
+            "fileId"       : key,
             "file_url"     : file_url,
             "thumbnail_url": thumb_url,
             "file_type"    : file_type,
