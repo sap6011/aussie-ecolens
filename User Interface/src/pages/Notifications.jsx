@@ -1,6 +1,6 @@
 import { useState } from 'react'
-const API = import.meta.env.VITE_API_URL
 
+const API_BASE = import.meta.env.VITE_API_URL
 
 const EMOJI_MAP = { koala:'🐨', kangaroo:'🦘', wombat:'🦡', dingo:'🦊', platypus:'🦆', echidna:'🦔', cockatoo:'🦜', kookaburra:'🐦', magpie:'🐦', possum:'🐭' }
 
