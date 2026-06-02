@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 
 const API_BASE = import.meta.env.VITE_API_URL
-const GCP_QUERY_URL = "https://query-thumbnail-776210689330.us-central1.run.app"
+const GCP_QUERY_URL = import.meta.env.VITE_GCP_QUERY_URL
 
 const TABS = [
   { id: 'species', label: 'By species' },
