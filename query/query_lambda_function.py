@@ -33,15 +33,14 @@ app.add_middleware(
 _gcp_client = None
 
 def get_gcp_client():
-    global _gcp_client
-    if _gcp_client is not None:
-        return _gcp_client
+    import json as json_mod
     from google.cloud import storage
     from google.oauth2 import service_account
-    gcp_creds = json.loads(os.environ.get('GCP_CREDENTIALS', '{}'))
-    credentials = service_account.Credentials.from_service_account_info(gcp_creds)
-    _gcp_client = storage.Client(credentials=credentials)
-    return _gcp_client
+    secrets_client = boto3.client("secretsmanager")
+    secret = secrets_client.get_secret_value(SecretId=GCP_SECRET_NAME)
+    creds_dict = json_mod.loads(secret["SecretString"])
+    credentials = service_account.Credentials.from_service_account_info(creds_dict)
+    return storage.Client(credentials=credentials, project=creds_dict["project_id"])
 
 def get_user_id_from_token(authorization: str = None):
     try:
