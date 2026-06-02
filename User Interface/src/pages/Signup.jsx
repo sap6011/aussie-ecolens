@@ -7,6 +7,8 @@ export default function Signup({ onSignup, onLogin }) {
   const [verifying, setVerifying] = useState(false)
   const [code, setCode] = useState('')
   const [cognitoUser, setCognitoUser] = useState(null)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
 
   function set(field) {
     return e => setForm(f => ({ ...f, [field]: e.target.value }))
@@ -88,11 +90,29 @@ export default function Signup({ onSignup, onLogin }) {
             </div>
             <div className="form-group">
               <label>Password</label>
-              <input type="password" placeholder="••••••••" value={form.password} onChange={set('password')} />
+              <div style={{ position: 'relative' }}>
+                <input type={showPassword ? 'text' : 'password'} placeholder="••••••••"
+                  value={form.password} onChange={set('password')}
+                  style={{ paddingRight: '2.5rem', width: '100%' }} />
+                <button type="button" onClick={() => setShowPassword(s => !s)}
+                  style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem' }}>
+                  {showPassword ? '🙈' : '👁️'}
+                </button>
+              </div>
             </div>
             <div className="form-group">
               <label>Confirm password</label>
-              <input type="password" placeholder="••••••••" value={form.confirm} onChange={set('confirm')} />
+              <div style={{ position: 'relative' }}>
+                <input type={showConfirm ? 'text' : 'password'} placeholder="••••••••"
+                  value={form.confirm} onChange={set('confirm')}
+                  style={{ paddingRight: '2.5rem', width: '100%' }} />
+                <button type="button" onClick={() => setShowConfirm(s => !s)}
+                  style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem' }}>
+                  {showConfirm ? '🙈' : '👁️'}
+                </button>
+              </div>
             </div>
             {error && <div className="alert alert-error">{error}</div>}
             <button type="submit" className="btn-primary" disabled={loading}>
