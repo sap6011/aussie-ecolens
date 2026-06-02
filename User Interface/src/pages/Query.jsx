@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 
-const API = import.meta.env.VITE_API_URL
+const API_BASE = import.meta.env.VITE_API_URL
 
 const TABS = [
   { id: 'species', label: 'By species' },
@@ -75,7 +75,7 @@ export default function Query() {
           body: JSON.stringify({ thumbnail_url: inputs.url.trim() })
         })
         data = await res.json()
-        setResults(data.original_url ? [{ original_url: data.original_url }] : [])
+        setResults(data.original_url ? [data] : [])
 
       } else if (activeTab === 'file') {
         const formData = new FormData()
