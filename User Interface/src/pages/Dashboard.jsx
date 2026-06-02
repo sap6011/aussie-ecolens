@@ -81,8 +81,8 @@ export default function Dashboard({ onUpload }) {
             const isVideo = name.match(/\.(mp4|mov|avi)$/i)
             const thumbSrc = f.thumbnail_url?.startsWith("s3://")
   ? f.thumbnail_url.replace(
-      /^s3:\/\/aussie-ecolens-media-169\/thumbnails\//,
-      "https://storage.googleapis.com/aussie-ecolens-thumbnails/thumbnails/"
+      `s3://${import.meta.env.VITE_MEDIA_BUCKET}/thumbnails/`,
+      `https://storage.googleapis.com/${import.meta.env.VITE_GCP_BUCKET_NAME}/thumbnails/`
     )
   : f.thumbnail_url
             return (

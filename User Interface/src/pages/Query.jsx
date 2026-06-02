@@ -30,8 +30,8 @@ export default function Query() {
     if (!url) return null
     return url.startsWith("s3://")
       ? url.replace(
-          /^s3:\/\/aussie-ecolens-media-169\/thumbnails\//,
-          "https://storage.googleapis.com/aussie-ecolens-thumbnails/thumbnails/"
+          `s3://${import.meta.env.VITE_MEDIA_BUCKET}/thumbnails/`,
+          `https://storage.googleapis.com/${import.meta.env.VITE_GCP_BUCKET_NAME}/thumbnails/`
         )
       : url
   }
