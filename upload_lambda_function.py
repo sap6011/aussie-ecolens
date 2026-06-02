@@ -10,40 +10,34 @@ logger.setLevel(logging.INFO)
 S3_BUCKET = os.environ.get("BUCKET_NAME", "aussie-ecolens-media")
 
 def lambda_handler(event, context):
-    """
-    Two modes:
-    1. Called from API Gateway → generate presigned URL for direct S3 upload
-    2. Called from S3 event → run deduplication
-    """
-    
-    # Mode 1: API Gateway request → generate presigned URL
     if "httpMethod" in event or "requestContext" in event:
         return generate_presigned_url(event, context)
-    
-    # Mode 2: S3 event → run deduplication
     return run_deduplication(event, context)
 
 
 def generate_presigned_url(event, context):
-    """Generate a presigned S3 URL for direct upload from browser"""
     try:
         body = json.loads(event.get("body") or "{}")
         filename = body.get("filename", "upload.jpg")
         content_type = body.get("content_type", "image/jpeg")
-        
+
+        # Extract userId from Cognito JWT claims
+        claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
+        user_id = claims.get("sub", "unknown")
+
         s3_client = boto3.client("s3")
-        
-        # Generate presigned URL valid for 5 minutes
+
         presigned_url = s3_client.generate_presigned_url(
             "put_object",
             Params={
                 "Bucket": S3_BUCKET,
                 "Key": f"uploads/{filename}",
-                "ContentType": content_type
+                "ContentType": content_type,
+                "Metadata": {"userid": user_id}
             },
             ExpiresIn=300
         )
-        
+
         return {
             "statusCode": 200,
             "headers": {
@@ -52,7 +46,8 @@ def generate_presigned_url(event, context):
             },
             "body": json.dumps({
                 "upload_url": presigned_url,
-                "key": f"uploads/{filename}"
+                "key": f"uploads/{filename}",
+                "user_id": user_id
             })
         }
     except ClientError as e:
@@ -65,57 +60,56 @@ def generate_presigned_url(event, context):
 
 
 def run_deduplication(event, context):
-    """Run deduplication on S3 uploaded file"""
     import hashlib
-    
-    
+
     s3_client = boto3.client("s3")
     dynamodb = boto3.resource("dynamodb")
     table = dynamodb.Table(os.environ.get("DYNAMODB_TABLE", "aussie-ecolens-files"))
-    
+
     results = []
-    
+
     for record in event.get("Records", []):
         bucket = record["s3"]["bucket"]["name"]
         key = record["s3"]["object"]["key"]
-        
+
         logger.info("Processing: s3://%s/%s", bucket, key)
-        
-        # Download file
+
+        # Get file and metadata
         obj = s3_client.get_object(Bucket=bucket, Key=key)
         file_bytes = obj["Body"].read()
-        
-        # Compute checksum
+
+        # Extract userId from S3 object metadata
+        user_id = obj.get("Metadata", {}).get("userid", "unknown")
+        logger.info("userId from metadata: %s", user_id)
+
         checksum = hashlib.sha256(file_bytes).hexdigest()
-        
-        # Check duplicate
+
         response = table.query(
             IndexName="checksum-index",
             KeyConditionExpression="checksum = :cs",
             ExpressionAttributeValues={":cs": checksum},
             Limit=1
         )
-        
+
         if response.get("Items"):
-            # Duplicate — delete from S3
             s3_client.delete_object(Bucket=bucket, Key=key)
             logger.warning("Duplicate detected, deleted: %s", key)
             results.append({"status": "duplicate", "key": key})
         else:
-            # New file — invoke tagger
             lambda_client = boto3.client("lambda")
             lambda_client.invoke(
                 FunctionName=os.environ.get("TAGGER_FUNCTION", "aussie-ecolens-tagger"),
                 InvocationType="Event",
-                Payload=json.dumps({        
+                Payload=json.dumps({
                     "Records": [{
                         "s3": {
                             "bucket": {"name": bucket},
                             "object": {"key": key}
                         }
-                    }]
-                })                          
+                    }],
+                    "user_id": user_id
+                })
             )
             results.append({"status": "accepted", "key": key, "checksum": checksum})
-    
+
     return {"statusCode": 200, "body": json.dumps(results)}
