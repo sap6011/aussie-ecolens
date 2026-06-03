@@ -16,14 +16,25 @@ const NAV_ITEMS = [
   { id: 'notifications', label: 'Notifications', icon: '🔔', section: 'Manage' },
 ]
 
+function isTokenValid() {
+  try {
+    const token = localStorage.getItem('token')
+    if (!token) return false
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return payload.exp * 1000 > Date.now()
+  } catch {
+    return false
+  }
+}
+
 export default function App() 
 {
-  const [page, setPage] = useState(() => localStorage.getItem('token') ? 'app' : 'login')
-const [activeTab, setActiveTab] = useState(() => localStorage.getItem('activeTab') || 'dashboard')
-const [user, setUser] = useState(() => {
-  const token = localStorage.getItem('token')
-  return token ? { email: localStorage.getItem('userEmail') || 'User' } : null
-})
+  const [page, setPage] = useState(() => isTokenValid() ? 'app' : 'login')
+  const [activeTab, setActiveTab] = useState('dashboard')
+  const [user, setUser] = useState(() => {
+    if (!isTokenValid()) return null
+    return { email: localStorage.getItem('userEmail') || 'User' }
+  })
 
   function handleLogin(userData) {
   setUser(userData)
