@@ -226,6 +226,23 @@ def delete_files(request: DeleteRequest, authorization: Optional[str] = Header(N
 
     return {"deleted": deleted}
 
+class PresignRequest(BaseModel):
+    file_url: str
+
+@app.post("/presign") #Temporary Pre Signed URL to access S3 files (To view full size image when thumbnail is clicked)
+def get_presigned_url(request: PresignRequest, authorization: Optional[str] = Header(None)):
+    if not request.file_url.startswith("s3://"):
+        raise HTTPException(status_code=400, detail="Not an S3 URL")
+    parts = request.file_url.replace("s3://", "").split("/", 1)
+    bucket, key = parts[0], parts[1]
+    s3_client = boto3.client('s3', region_name=os.getenv('AWS_REGION', 'ap-southeast-2'))
+    url = s3_client.generate_presigned_url(
+        'get_object',
+        Params={'Bucket': bucket, 'Key': key},
+        ExpiresIn=300
+    )
+    return {"presigned_url": url}
+
 
 @app.post("/query/file")
 async def query_by_file(file: UploadFile = File(...), authorization: Optional[str] = Header(None)):

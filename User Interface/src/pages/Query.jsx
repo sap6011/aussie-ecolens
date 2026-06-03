@@ -16,6 +16,8 @@ export default function Query() {
   const [inputs, setInputs] = useState({ species: '', tags: '', url: '', file: null })
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
+  const [lightbox, setLightbox] = useState(null)
+  const [lightboxLoading, setLightboxLoading] = useState(false)
   const fileRef = useRef()
 
   function setInput(key, val) {
@@ -34,6 +36,31 @@ export default function Query() {
           `https://storage.googleapis.com/${import.meta.env.VITE_GCP_BUCKET_NAME}/thumbnails/`
         )
       : url
+  }
+
+  async function openLightbox(fileUrl, name) {
+    if (!fileUrl) return
+    setLightboxLoading(true)
+    setLightbox({ src: null, name })
+    try {
+      const token = getToken()
+      const res = await fetch(`${API_BASE}/presign`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ file_url: fileUrl })
+      })
+      const data = await res.json()
+      if (data.presigned_url) setLightbox({ src: data.presigned_url, name })
+    } catch (err) {
+      console.error("Failed to get presigned URL:", err)
+      setLightbox(null)
+    } finally {
+      setLightboxLoading(false)
+    }
+  }
+
+  function closeLightbox(e) {
+    if (e.target === e.currentTarget) setLightbox(null)
   }
 
   async function runQuery() {
@@ -69,8 +96,6 @@ export default function Query() {
         setResults(data.results || [])
 
       } else if (activeTab === 'url') {
-        // Cross-cloud auth: request goes to GCP Cloud Run, which validates
-        // the Cognito JWT itself before querying AWS DynamoDB
         res = await fetch(`${GCP_QUERY_URL}/query/thumbnail`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -100,6 +125,53 @@ export default function Query() {
 
   return (
     <div>
+      {/* Lightbox */}
+      {lightbox !== null && (
+        <div
+          onClick={closeLightbox}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,0.85)',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            backdropFilter: 'blur(6px)',
+            animation: 'fadeIn 0.2s ease',
+          }}
+        >
+          <style>{`@keyframes fadeIn { from { opacity:0 } to { opacity:1 } }`}</style>
+          <button
+            onClick={() => setLightbox(null)}
+            style={{
+              position: 'absolute', top: 20, right: 28,
+              background: 'rgba(255,255,255,0.12)', border: 'none',
+              color: '#fff', fontSize: 26, width: 44, height: 44,
+              borderRadius: '50%', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >×</button>
+
+          {lightboxLoading || !lightbox.src ? (
+            <div style={{ color: '#fff', fontSize: 14, opacity: 0.7 }}>Loading full-size image...</div>
+          ) : (
+            <>
+              <img
+                src={lightbox.src}
+                alt={lightbox.name}
+                style={{
+                  maxWidth: '90vw', maxHeight: '82vh',
+                  borderRadius: 10,
+                  boxShadow: '0 8px 48px rgba(0,0,0,0.6)',
+                  animation: 'fadeIn 0.25s ease',
+                }}
+              />
+              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 14 }}>
+                {lightbox.name} &nbsp;·&nbsp; Click outside to close
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="page-header">
         <div className="page-title">Query Files</div>
         <div className="page-subtitle">Search your media by species, tags, or URL</div>
@@ -175,12 +247,28 @@ export default function Query() {
             || r.original_url?.split("/").pop() || "file"
           const tags = Object.keys(r.tags || {})
           const thumbSrc = getThumbSrc(r.thumbnail_url)
+          const fullUrl = r.original_url || r.file_url
+          const isVideo = r.file_type === 'video'
           return (
-            <div className="result-card" key={i}>
-              <div className="result-img">
+            <div
+              className="result-card"
+              key={i}
+              onClick={() => !isVideo && openLightbox(fullUrl, name)}
+              style={{ cursor: isVideo ? 'default' : 'pointer' }}
+              title={isVideo ? '' : 'Click to view full-size'}
+            >
+              <div className="result-img" style={{ position: 'relative', overflow: 'hidden' }}>
                 {thumbSrc
                   ? <img src={thumbSrc} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   : "🖼️"}
+                {!isVideo && (
+                  <div className="result-overlay" style={{
+                    position: 'absolute', inset: 0,
+                    background: 'rgba(0,0,0,0)', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center',
+                    fontSize: 22, transition: 'background 0.2s',
+                  }}>🔍</div>
+                )}
               </div>
               <div className="result-body">
                 <div className="result-name">{name}</div>
@@ -190,6 +278,10 @@ export default function Query() {
           )
         })}
       </div>
+
+      <style>{`
+        .result-card:hover .result-overlay { background: rgba(0,0,0,0.35) !important; color: white; }
+      `}</style>
     </div>
   )
 }
