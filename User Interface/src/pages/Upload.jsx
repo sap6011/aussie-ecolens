@@ -2,27 +2,28 @@ import { useState, useRef } from 'react'
 
 const API = import.meta.env.VITE_API_URL
 
+async function computeSHA256(file) {
+  const buffer = await file.arrayBuffer()
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer)
+  return Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
 export default function Upload() {
   const [file, setFile] = useState(null)
   const [status, setStatus] = useState(null) // null | 'success' | 'duplicate' | 'error'
   const [statusMsg, setStatusMsg] = useState('')
   const [loading, setLoading] = useState(false)
-  const [checking, setChecking] = useState(false)
+  const [uploadStage, setUploadStage] = useState('')
   const inputRef = useRef()
 
   function handleFile(e) {
-    if (e.target.files[0]) {
-      setFile(e.target.files[0])
-      setStatus(null)
-    }
+    if (e.target.files[0]) { setFile(e.target.files[0]); setStatus(null) }
   }
 
   function handleDrop(e) {
     e.preventDefault()
-    if (e.dataTransfer.files[0]) {
-      setFile(e.dataTransfer.files[0])
-      setStatus(null)
-    }
+    if (e.dataTransfer.files[0]) { setFile(e.dataTransfer.files[0]); setStatus(null) }
   }
 
   async function handleUpload() {
@@ -33,29 +34,28 @@ export default function Upload() {
     try {
       const token = localStorage.getItem('token')
 
-      // Step 1 — check for duplicate via /query/file (real checksum lookup in DynamoDB)
-      setChecking(true)
-      const formData = new FormData()
-      formData.append('file', file)
-      const dupRes = await fetch(`${API}/query/file`, {
+      // Step 1 — compute SHA-256 in browser (instant, no ML)
+      setUploadStage('checking')
+      const checksum = await computeSHA256(file)
+
+      // Step 2 — check DynamoDB for matching checksum via /check-duplicate
+      const dupRes = await fetch(`${API}/check-duplicate`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ checksum })
       })
       const dupData = await dupRes.json()
-      setChecking(false)
 
-      if (dupData.results?.length > 0) {
-        const existingName = dupData.results[0].file_url?.split('/').pop()
-          || dupData.results[0].thumbnail_url?.split('/').pop()?.replace('_thumb.jpg', '')
-          || 'an existing file'
+      if (dupData.duplicate) {
         setStatus('duplicate')
-        setStatusMsg(`This file already exists in your library as "${existingName}". Duplicate uploads are blocked.`)
+        setStatusMsg(`This file already exists in your library as "${dupData.existing_file}". Duplicate uploads are blocked.`)
         setLoading(false)
+        setUploadStage('')
         return
       }
 
-      // Step 2 — Get presigned URL
+      // Step 3 — get presigned URL
+      setUploadStage('uploading')
       const res = await fetch(`${API}/upload`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -63,7 +63,7 @@ export default function Upload() {
       })
       const { upload_url } = await res.json()
 
-      // Step 3 — Upload directly to S3
+      // Step 4 — upload directly to S3
       await fetch(upload_url, {
         method: 'PUT',
         headers: { 'Content-Type': file.type },
@@ -74,12 +74,13 @@ export default function Upload() {
       setStatus('success')
       setStatusMsg(`"${file.name}" uploaded successfully — species detection in progress.`)
       setTimeout(() => setStatus(null), 6000)
+
     } catch (err) {
       setStatus('error')
       setStatusMsg(err.message)
     } finally {
       setLoading(false)
-      setChecking(false)
+      setUploadStage('')
     }
   }
 
@@ -92,7 +93,6 @@ export default function Upload() {
         <div className="page-subtitle">Images and videos are auto-tagged on upload</div>
       </div>
 
-      {/* Status banners */}
       {status === 'success' && (
         <div className="alert alert-success" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 20 }}>✅</span>
@@ -133,7 +133,6 @@ export default function Upload() {
         </div>
       )}
 
-      {/* Drop zone */}
       <div
         className="upload-zone"
         onClick={() => inputRef.current.click()}
@@ -148,7 +147,6 @@ export default function Upload() {
       </div>
       <input ref={inputRef} type="file" accept="image/*,video/*" style={{ display: 'none' }} onChange={handleFile} />
 
-      {/* Selected file row */}
       {file && (
         <div style={{
           background: 'var(--eco-surface)', border: '1px solid var(--eco-border)',
@@ -165,15 +163,18 @@ export default function Upload() {
             <div style={{ fontSize: 13, fontWeight: 500 }}>{file.name}</div>
             <div style={{ fontSize: 11, color: 'var(--eco-muted)' }}>
               {(file.size / 1024 / 1024).toFixed(2)} MB
-              {checking && (
-                <span style={{ marginLeft: 8, color: 'var(--eco-primary)' }}>
-                  Checking for duplicates…
-                </span>
+              {uploadStage === 'checking' && (
+                <span style={{ marginLeft: 8, color: 'var(--eco-primary)' }}>Checking for duplicates…</span>
+              )}
+              {uploadStage === 'uploading' && (
+                <span style={{ marginLeft: 8, color: 'var(--eco-primary)' }}>Uploading to S3…</span>
               )}
             </div>
           </div>
           <button className="btn-add" onClick={handleUpload} disabled={loading}>
-            {loading ? (checking ? 'Checking…' : 'Uploading…') : 'Upload'}
+            {uploadStage === 'checking' ? 'Checking…'
+              : uploadStage === 'uploading' ? 'Uploading…'
+              : 'Upload'}
           </button>
         </div>
       )}
@@ -183,7 +184,7 @@ export default function Upload() {
         <div className="how-card">
           <div className="how-icon">📤</div>
           <div className="how-title">1. Upload</div>
-          <div className="how-desc">File is stored securely with duplicate detection via SHA-256 checksum</div>
+          <div className="how-desc">File stored securely with SHA-256 checksum duplicate detection</div>
         </div>
         <div className="how-card">
           <div className="how-icon">🤖</div>

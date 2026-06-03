@@ -226,10 +226,11 @@ def delete_files(request: DeleteRequest, authorization: Optional[str] = Header(N
 
     return {"deleted": deleted}
 
+
 class PresignRequest(BaseModel):
     file_url: str
 
-@app.post("/presign") #Temporary Pre Signed URL to access S3 files (To view full size image when thumbnail is clicked)
+@app.post("/presign")
 def get_presigned_url(request: PresignRequest, authorization: Optional[str] = Header(None)):
     if not request.file_url.startswith("s3://"):
         raise HTTPException(status_code=400, detail="Not an S3 URL")
@@ -244,13 +245,27 @@ def get_presigned_url(request: PresignRequest, authorization: Optional[str] = He
     return {"presigned_url": url}
 
 
+class ChecksumRequest(BaseModel):
+    checksum: str
+
+@app.post("/check-duplicate")
+def check_duplicate(request: ChecksumRequest, authorization: Optional[str] = Header(None)):
+    response = table.scan(
+        FilterExpression=boto3.dynamodb.conditions.Attr('checksum').eq(request.checksum)
+    )
+    items = response.get('Items', [])
+    if items:
+        existing_name = items[0].get('file_url', '').split('/')[-1]
+        return {"duplicate": True, "existing_file": existing_name}
+    return {"duplicate": False}
+
+
 @app.post("/query/file")
 async def query_by_file(file: UploadFile = File(...), authorization: Optional[str] = Header(None)):
     user_id = get_user_id_from_token(authorization)
     contents = await file.read()
 
     try:
-        # Step 1 — upload to a temp S3 key that won't be indexed
         s3_client = boto3.client('s3', region_name=os.getenv('AWS_REGION', 'ap-southeast-2'))
         media_bucket = os.getenv('BUCKET_NAME', 'aussie-ecolens-media-940')
         tmp_key = f"query-tmp/{file.filename}"
@@ -265,8 +280,6 @@ async def query_by_file(file: UploadFile = File(...), authorization: Optional[st
         os.unlink(tmp_path)
         logger.info("Uploaded query file to s3://%s/%s", media_bucket, tmp_key)
 
-        # Step 2 — invoke tagger Lambda synchronously with query_only=True
-        # This runs ML tagging but skips DynamoDB save, thumbnail, and SNS
         lambda_client = boto3.client('lambda', region_name=os.getenv('AWS_REGION', 'ap-southeast-2'))
         invoke_response = lambda_client.invoke(
             FunctionName=os.getenv('TAGGER_FUNCTION', 'aussie-ecolens-tagger'),
@@ -280,21 +293,15 @@ async def query_by_file(file: UploadFile = File(...), authorization: Optional[st
         payload = json.loads(invoke_response['Payload'].read())
         body = json.loads(payload.get('body', '[]'))
 
-        # Step 3 — delete the temp file from S3 immediately (not permanently stored)
         s3_client.delete_object(Bucket=media_bucket, Key=tmp_key)
         logger.info("Deleted temp query file from S3")
 
         if not body or not body[0].get('tags'):
-            return {
-                "results": [],
-                "match_type": "none",
-                "message": "No species detected in uploaded file"
-            }
+            return {"results": [], "match_type": "none", "message": "No species detected in uploaded file"}
 
         detected_tags = body[0]['tags']
         logger.info("Tags detected in query file: %s", detected_tags)
 
-        # Step 4 — find all DB files containing ANY of the detected species
         scan_response = table.scan()
         results = []
         for item in scan_response['Items']:
@@ -309,11 +316,7 @@ async def query_by_file(file: UploadFile = File(...), authorization: Optional[st
                     "tags": fix_decimals(file_tags)
                 })
 
-        return {
-            "results": results,
-            "match_type": "tag-based",
-            "detected_tags": detected_tags
-        }
+        return {"results": results, "match_type": "tag-based", "detected_tags": detected_tags}
 
     except Exception as e:
         logger.error("query_by_file error: %s", e)
