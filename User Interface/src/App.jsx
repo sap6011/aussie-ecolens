@@ -30,7 +30,7 @@ function isTokenValid() {
 export default function App() 
 {
   const [page, setPage] = useState(() => isTokenValid() ? 'app' : 'login')
-  const [activeTab, setActiveTab] = useState('dashboard')
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('activeTab') || 'dashboard')
   const [user, setUser] = useState(() => {
     if (!isTokenValid()) return null
     return { email: localStorage.getItem('userEmail') || 'User' }
