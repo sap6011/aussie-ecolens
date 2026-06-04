@@ -142,7 +142,7 @@ export default function Dashboard({ onUpload }) {
         <div className="file-grid">
           {files.map(f => {
             const name = f.thumbnail_url?.split("/").pop()?.replace("_thumb.jpg", ".JPG") || "file"
-            const tags = f.file_type || ""
+            const tagKeys = Object.keys(f.tags || {})
             const isVideo = name.match(/\.(mp4|mov|avi)$/i)
             const thumbSrc = f.thumbnail_url?.startsWith("s3://")
               ? f.thumbnail_url.replace(
@@ -182,7 +182,12 @@ export default function Dashboard({ onUpload }) {
                 </div>
                 <div className="file-info">
                   <div className="file-name">{name}</div>
-                  <div className="file-tags">{tags || "No tags yet"}</div>
+                  <div className="file-tags">
+                    {tagKeys.length > 0
+                      ? tagKeys.map(t => <span key={t} className="tag-pill" style={{ fontSize: 10, padding: '1px 6px', marginRight: 3 }}>{t}</span>)
+                      : <span style={{ color: 'var(--eco-muted)', fontSize: 11 }}>No tags yet</span>
+                    }
+                  </div>
                 </div>
               </div>
             )
