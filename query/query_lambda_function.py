@@ -19,6 +19,7 @@ logger.setLevel(logging.INFO)
 SNS_TOPIC_ARN = os.environ.get('SNS_TOPIC_ARN')
 dynamodb = boto3.resource('dynamodb', region_name=os.getenv('AWS_REGION', 'us-east-1'))
 table = dynamodb.Table(os.getenv('DYNAMODB_TABLE', 'aussie-ecolens-files'))
+subs_table = dynamodb.Table(os.getenv('SUBSCRIPTIONS_TABLE', 'aussie-ecolens-subscriptions'))
 
 app = FastAPI()
 
@@ -71,21 +72,32 @@ def fix_decimals(obj):
 
 class SubscribeRequest(BaseModel):
     email: str
+    tags: Optional[List[str]] = []  # empty = subscribe to all species
 
 @app.post("/subscribe")
 def subscribe_email(request: SubscribeRequest):
     sns = boto3.client('sns', region_name=os.getenv('AWS_REGION', 'us-east-1'))
-    logger.info("Subscribing email: %s to topic: %s", request.email, SNS_TOPIC_ARN)
+    logger.info("Subscribing %s with tags: %s", request.email, request.tags)
     try:
+        # Subscribe to SNS for email delivery
         response = sns.subscribe(
             TopicArn=SNS_TOPIC_ARN,
             Protocol='email',
             Endpoint=request.email
         )
         logger.info("SNS subscribe response: %s", response)
-        return {"message": f"Confirmation email sent to {request.email}. Please check your inbox."}
+
+        # Save tag preferences to DynamoDB subscriptions table
+        subs_table.put_item(Item={
+            'email': request.email,
+            'tags': request.tags or [],
+        })
+        logger.info("Saved tag prefs for %s: %s", request.email, request.tags)
+
+        tag_msg = f" for species: {', '.join(request.tags)}" if request.tags else " for all species"
+        return {"message": f"Confirmation email sent to {request.email}{tag_msg}. Please check your inbox."}
     except Exception as e:
-        logger.error("SNS subscribe failed: %s", str(e))
+        logger.error("Subscribe failed: %s", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -200,7 +212,6 @@ def delete_files(request: DeleteRequest, authorization: Optional[str] = Header(N
     deleted = 0
     skipped = 0
     for item in response['Items']:
-        # Enforce ownership — only owner can delete
         if user_id and item.get('userId') and item.get('userId') != user_id:
             logger.warning("User %s tried to delete file owned by %s — skipped", user_id, item.get('userId'))
             skipped += 1

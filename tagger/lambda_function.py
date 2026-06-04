@@ -183,10 +183,55 @@ def tag_video(local_video_path, work_dir):
     return dict(all_tags)
 
 
+def notify_subscribers(sns_client, dynamodb, tags, filename, gcs_thumb):
+    """
+    Send SNS email only to subscribers whose tag preferences
+    overlap with detected tags. Empty prefs = notify for all species.
+    """
+    subs_table = dynamodb.Table(
+        os.environ.get('SUBSCRIPTIONS_TABLE', 'aussie-ecolens-subscriptions')
+    )
+    sns_topic_arn = os.environ.get("SNS_TOPIC_ARN")
+    if not sns_topic_arn:
+        return
+
+    try:
+        response = subs_table.scan()
+        subscribers = response.get('Items', [])
+    except Exception as e:
+        logger.error("Failed to scan subscriptions table: %s", e)
+        return
+
+    detected_species = set(tags.keys())
+
+    for sub in subscribers:
+        sub_email = sub.get('email')
+        sub_tags  = set(sub.get('tags', []))  # empty = all species
+
+        # Notify if: no filter set OR any detected species matches filter
+        if not sub_tags or sub_tags & detected_species:
+            matched = sub_tags & detected_species if sub_tags else detected_species
+            try:
+                sns_client.publish(
+                    TopicArn=sns_topic_arn,
+                    Subject=f"New wildlife detected in {filename}",
+                    Message=(
+                        f"Species detected: {json.dumps(tags)}\n"
+                        f"Matched your filter: {', '.join(matched)}\n"
+                        f"File: {filename}\n"
+                        f"Thumbnail: {gcs_thumb}"
+                    )
+                )
+                logger.info("Notified %s (matched: %s)", sub_email, matched)
+            except Exception as e:
+                logger.error("Failed to notify %s: %s", sub_email, e)
+
+
 def lambda_handler(event, context):
-    s3_client = boto3.client("s3")
-    dynamodb  = boto3.resource("dynamodb")
-    table     = dynamodb.Table(DYNAMODB_TABLE)
+    s3_client  = boto3.client("s3")
+    dynamodb   = boto3.resource("dynamodb")
+    sns_client = boto3.client("sns")
+    table      = dynamodb.Table(DYNAMODB_TABLE)
 
     load_models(s3_client)
 
@@ -198,7 +243,7 @@ def lambda_handler(event, context):
         records = [{"bucket": event.get("bucket"), "key": event.get("key")}]
 
     user_id    = event.get("user_id", "unknown")
-    query_only = event.get("query_only", False)  # ← NEW: skip save/thumbnail/SNS when True
+    query_only = event.get("query_only", False)
 
     for record in records:
         bucket = record["bucket"]
@@ -238,12 +283,11 @@ def lambda_handler(event, context):
         file_url  = f"s3://{bucket}/{key}"
         thumb_url = thumbnail_url_for(bucket, key) if is_image else None
 
-        # ── query_only: return tags without persisting anything ──────────────
+        # query_only: return tags without persisting anything
         if query_only:
             logger.info("query_only=True — skipping DynamoDB/thumbnail/SNS for %s", key)
             results.append({"file_url": file_url, "file_type": file_type, "tags": tags})
             continue
-        # ─────────────────────────────────────────────────────────────────────
 
         item = {
             "fileId"       : key,
@@ -266,22 +310,14 @@ def lambda_handler(event, context):
                 Payload=json.dumps({"bucket": bucket, "key": key})
             )
 
-        sns_topic_arn = os.environ.get("SNS_TOPIC_ARN")
-        if sns_topic_arn and tags:
+        # Tag-filtered SNS notifications
+        if tags:
             gcp_bucket = os.environ.get("GCP_BUCKET_NAME", "aussie-ecolens-thumbnails")
             gcs_thumb = (
                 f"https://storage.googleapis.com/{gcp_bucket}/thumbnails/{Path(key).stem}_thumb.jpg"
                 if is_image else "N/A"
             )
-            boto3.client("sns").publish(
-                TopicArn=sns_topic_arn,
-                Subject=f"New wildlife detected in {Path(key).name}",
-                Message=(
-                    f"Species detected: {json.dumps(tags)}\n"
-                    f"File: {Path(key).name}\n"
-                    f"Thumbnail: {gcs_thumb}"
-                )
-            )
+            notify_subscribers(sns_client, dynamodb, tags, Path(key).name, gcs_thumb)
 
         results.append({"file_url": file_url, "file_type": file_type, "tags": tags})
         logger.info("Tagged %s → %s", key, tags)
