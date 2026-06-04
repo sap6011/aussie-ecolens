@@ -3,6 +3,7 @@ import logging
 import os
 import boto3
 from botocore.exceptions import ClientError
+from urllib.parse import unquote_plus
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -21,7 +22,6 @@ def generate_presigned_url(event, context):
         filename = body.get("filename", "upload.jpg")
         content_type = body.get("content_type", "image/jpeg")
 
-        # Extract userId from Cognito JWT claims
         claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
         user_id = claims.get("sub", "unknown")
 
@@ -70,15 +70,13 @@ def run_deduplication(event, context):
 
     for record in event.get("Records", []):
         bucket = record["s3"]["bucket"]["name"]
-        key = record["s3"]["object"]["key"]
+        key = unquote_plus(record["s3"]["object"]["key"])  # ← decode URL-encoded key
 
         logger.info("Processing: s3://%s/%s", bucket, key)
 
-        # Get file and metadata
         obj = s3_client.get_object(Bucket=bucket, Key=key)
         file_bytes = obj["Body"].read()
 
-        # Extract userId from S3 object metadata
         user_id = obj.get("Metadata", {}).get("userid", "unknown")
         logger.info("userId from metadata: %s", user_id)
 

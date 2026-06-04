@@ -141,9 +141,9 @@ export default function Dashboard({ onUpload }) {
       ) : (
         <div className="file-grid">
           {files.map(f => {
-            const name = f.thumbnail_url?.split("/").pop()?.replace("_thumb.jpg", ".JPG") || "file"
+            const name = f.thumbnail_url?.split("/").pop()?.replace("_thumb.jpg", ".JPG") || f.original_url?.split("/").pop() || f.file_url?.split("/").pop() || "file"
             const tagKeys = Object.keys(f.tags || {})
-            const isVideo = name.match(/\.(mp4|mov|avi)$/i)
+            const isVideo = f.file_type === "video" || name.match(/\.(mp4|mov|avi)$/i)
             const thumbSrc = f.thumbnail_url?.startsWith("s3://")
               ? f.thumbnail_url.replace(
                   `s3://${import.meta.env.VITE_MEDIA_BUCKET}/thumbnails/`,
@@ -184,8 +184,8 @@ export default function Dashboard({ onUpload }) {
                   <div className="file-name">{name}</div>
                   <div className="file-tags">
                     {tagKeys.length > 0
-                      ? tagKeys.map(t => <span key={t} className="tag-pill" style={{ fontSize: 10, padding: '1px 6px', marginRight: 3 }}>{t}</span>)
-                      : <span style={{ color: 'var(--eco-muted)', fontSize: 11 }}>No tags yet</span>
+                      ? tagKeys.map(t => <span key={t} className="tag-pill" style={{ fontSize: 10, padding: "1px 6px", marginRight: 3 }}>{t}</span>)
+                      : <span style={{ color: "var(--eco-muted)", fontSize: 11 }}>No tags yet</span>
                     }
                   </div>
                 </div>

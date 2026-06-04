@@ -11,6 +11,7 @@ import hashlib
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import unquote_plus
 
 import boto3
 from botocore.exceptions import ClientError
@@ -208,7 +209,6 @@ def notify_subscribers(sns_client, dynamodb, tags, filename, gcs_thumb):
         sub_email = sub.get('email')
         sub_tags  = set(sub.get('tags', []))  # empty = all species
 
-        # Notify if: no filter set OR any detected species matches filter
         if not sub_tags or sub_tags & detected_species:
             matched = sub_tags & detected_species if sub_tags else detected_species
             try:
@@ -238,7 +238,14 @@ def lambda_handler(event, context):
     results = []
 
     if "Records" in event:
-        records = [{"bucket": r["s3"]["bucket"]["name"], "key": r["s3"]["object"]["key"]} for r in event["Records"]]
+        # ← unquote_plus decodes URL-encoded keys from S3 event triggers
+        records = [
+            {
+                "bucket": r["s3"]["bucket"]["name"],
+                "key": unquote_plus(r["s3"]["object"]["key"])
+            }
+            for r in event["Records"]
+        ]
     else:
         records = [{"bucket": event.get("bucket"), "key": event.get("key")}]
 
@@ -283,7 +290,6 @@ def lambda_handler(event, context):
         file_url  = f"s3://{bucket}/{key}"
         thumb_url = thumbnail_url_for(bucket, key) if is_image else None
 
-        # query_only: return tags without persisting anything
         if query_only:
             logger.info("query_only=True — skipping DynamoDB/thumbnail/SNS for %s", key)
             results.append({"file_url": file_url, "file_type": file_type, "tags": tags})
@@ -310,7 +316,6 @@ def lambda_handler(event, context):
                 Payload=json.dumps({"bucket": bucket, "key": key})
             )
 
-        # Tag-filtered SNS notifications
         if tags:
             gcp_bucket = os.environ.get("GCP_BUCKET_NAME", "aussie-ecolens-thumbnails")
             gcs_thumb = (
