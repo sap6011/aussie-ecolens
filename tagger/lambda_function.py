@@ -11,7 +11,6 @@ import hashlib
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import unquote_plus
 
 import boto3
 from botocore.exceptions import ClientError
@@ -163,9 +162,11 @@ def tag_video(local_video_path, work_dir):
         raise ValueError(f"Could not open video: {local_video_path}")
     fps = cap.get(cv2.CAP_PROP_FPS) or 1
     frame_step = max(1, int(round(fps)))
-    all_tags = Counter()
     frame_idx = 0
     saved = 0
+    frame_paths = []
+
+    # Step 1 - extract all frames first (1 per second)
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -173,84 +174,51 @@ def tag_video(local_video_path, work_dir):
         if frame_idx % frame_step == 0:
             frame_path = work_dir / f"frame_{saved:05d}.jpg"
             cv2.imwrite(str(frame_path), frame)
-            crops_dir = work_dir / f"crops_{saved}"
-            crops_dir.mkdir(exist_ok=True)
-            frame_tags = tag_image(frame_path, crops_dir)
-            all_tags += Counter(frame_tags)
+            frame_paths.append(frame_path)
             saved += 1
         frame_idx += 1
     cap.release()
-    logger.info("Video: %d frames, tags: %s", saved, dict(all_tags))
-    return dict(all_tags)
+    logger.info("Video: extracted %d frames", saved)
 
+    if not frame_paths:
+        logger.warning("No frames extracted from video")
+        return {}
 
-def notify_subscribers(sns_client, dynamodb, tags, filename, gcs_thumb):
-    """
-    Send SNS email only to subscribers whose tag preferences
-    overlap with detected tags. Empty prefs = notify for all species.
-    """
-    subs_table = dynamodb.Table(
-        os.environ.get('SUBSCRIPTIONS_TABLE', 'aussie-ecolens-subscriptions')
-    )
-    sns_topic_arn = os.environ.get("SNS_TOPIC_ARN")
-    if not sns_topic_arn:
-        return
+    # Step 2 - run MegaDetector ONCE on ALL frames in one batch
+    md_results = detect_animals([str(p) for p in frame_paths])
 
-    try:
-        response = subs_table.scan()
-        subscribers = response.get('Items', [])
-    except Exception as e:
-        logger.error("Failed to scan subscriptions table: %s", e)
-        return
+    # Step 3 - crop detections across all frames
+    crops_dir = work_dir / "crops"
+    crops_dir.mkdir(exist_ok=True)
+    crops = crop_detections(md_results, crops_dir)
 
-    detected_species = set(tags.keys())
+    if not crops:
+        logger.warning("No animals detected in any video frame")
+        return {}
 
-    for sub in subscribers:
-        sub_email = sub.get('email')
-        sub_tags  = set(sub.get('tags', []))  # empty = all species
-
-        if not sub_tags or sub_tags & detected_species:
-            matched = sub_tags & detected_species if sub_tags else detected_species
-            try:
-                sns_client.publish(
-                    TopicArn=sns_topic_arn,
-                    Subject=f"New wildlife detected in {filename}",
-                    Message=(
-                        f"Species detected: {json.dumps(tags)}\n"
-                        f"Matched your filter: {', '.join(matched)}\n"
-                        f"File: {filename}\n"
-                        f"Thumbnail: {gcs_thumb}"
-                    )
-                )
-                logger.info("Notified %s (matched: %s)", sub_email, matched)
-            except Exception as e:
-                logger.error("Failed to notify %s: %s", sub_email, e)
+    # Step 4 - classify all crops
+    predictions = [classify_crop(c) for c in crops]
+    tags = dict(Counter(predictions))
+    logger.info("Video: %d frames, tags: %s", saved, tags)
+    return tags
 
 
 def lambda_handler(event, context):
-    s3_client  = boto3.client("s3")
-    dynamodb   = boto3.resource("dynamodb")
-    sns_client = boto3.client("sns")
-    table      = dynamodb.Table(DYNAMODB_TABLE)
+    s3_client = boto3.client("s3")
+    dynamodb  = boto3.resource("dynamodb")
+    table     = dynamodb.Table(DYNAMODB_TABLE)
 
     load_models(s3_client)
 
     results = []
 
     if "Records" in event:
-        # ← unquote_plus decodes URL-encoded keys from S3 event triggers
-        records = [
-            {
-                "bucket": r["s3"]["bucket"]["name"],
-                "key": unquote_plus(r["s3"]["object"]["key"])
-            }
-            for r in event["Records"]
-        ]
+        records = [{"bucket": r["s3"]["bucket"]["name"], "key": r["s3"]["object"]["key"]} for r in event["Records"]]
     else:
         records = [{"bucket": event.get("bucket"), "key": event.get("key")}]
 
     user_id    = event.get("user_id", "unknown")
-    query_only = event.get("query_only", False)
+    query_only = event.get("query_only", False)  # ← NEW: skip save/thumbnail/SNS when True
 
     for record in records:
         bucket = record["bucket"]
@@ -290,10 +258,12 @@ def lambda_handler(event, context):
         file_url  = f"s3://{bucket}/{key}"
         thumb_url = thumbnail_url_for(bucket, key) if is_image else None
 
+        # ── query_only: return tags without persisting anything ──────────────
         if query_only:
             logger.info("query_only=True — skipping DynamoDB/thumbnail/SNS for %s", key)
             results.append({"file_url": file_url, "file_type": file_type, "tags": tags})
             continue
+        # ─────────────────────────────────────────────────────────────────────
 
         item = {
             "fileId"       : key,
@@ -316,13 +286,22 @@ def lambda_handler(event, context):
                 Payload=json.dumps({"bucket": bucket, "key": key})
             )
 
-        if tags:
+        sns_topic_arn = os.environ.get("SNS_TOPIC_ARN")
+        if sns_topic_arn and tags:
             gcp_bucket = os.environ.get("GCP_BUCKET_NAME", "aussie-ecolens-thumbnails")
             gcs_thumb = (
                 f"https://storage.googleapis.com/{gcp_bucket}/thumbnails/{Path(key).stem}_thumb.jpg"
                 if is_image else "N/A"
             )
-            notify_subscribers(sns_client, dynamodb, tags, Path(key).name, gcs_thumb)
+            boto3.client("sns").publish(
+                TopicArn=sns_topic_arn,
+                Subject=f"New wildlife detected in {Path(key).name}",
+                Message=(
+                    f"Species detected: {json.dumps(tags)}\n"
+                    f"File: {Path(key).name}\n"
+                    f"Thumbnail: {gcs_thumb}"
+                )
+            )
 
         results.append({"file_url": file_url, "file_type": file_type, "tags": tags})
         logger.info("Tagged %s → %s", key, tags)

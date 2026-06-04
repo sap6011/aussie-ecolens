@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Optional
 from decimal import Decimal
 from pathlib import Path
+from urllib.parse import unquote_plus
 import logging
 
 logger = logging.getLogger(__name__)
@@ -72,28 +73,23 @@ def fix_decimals(obj):
 
 class SubscribeRequest(BaseModel):
     email: str
-    tags: Optional[List[str]] = []  # empty = subscribe to all species
+    tags: Optional[List[str]] = []
 
 @app.post("/subscribe")
 def subscribe_email(request: SubscribeRequest):
     sns = boto3.client('sns', region_name=os.getenv('AWS_REGION', 'us-east-1'))
     logger.info("Subscribing %s with tags: %s", request.email, request.tags)
     try:
-        # Subscribe to SNS for email delivery
         response = sns.subscribe(
             TopicArn=SNS_TOPIC_ARN,
             Protocol='email',
             Endpoint=request.email
         )
         logger.info("SNS subscribe response: %s", response)
-
-        # Save tag preferences to DynamoDB subscriptions table
         subs_table.put_item(Item={
             'email': request.email,
             'tags': request.tags or [],
         })
-        logger.info("Saved tag prefs for %s: %s", request.email, request.tags)
-
         tag_msg = f" for species: {', '.join(request.tags)}" if request.tags else " for all species"
         return {"message": f"Confirmation email sent to {request.email}{tag_msg}. Please check your inbox."}
     except Exception as e:
@@ -106,7 +102,6 @@ class TagQuery(BaseModel):
 
 @app.post("/query/tags")
 def query_by_tags(query: TagQuery, authorization: Optional[str] = Header(None)):
-    # All authenticated users can see all files
     response = table.scan()
     results = []
     for item in response['Items']:
@@ -128,7 +123,6 @@ class SpeciesQuery(BaseModel):
 
 @app.post("/query/species")
 def query_by_species(query: SpeciesQuery, authorization: Optional[str] = Header(None)):
-    # All authenticated users can see all files
     response = table.scan()
     results = []
     for item in response['Items']:
@@ -149,7 +143,6 @@ class ThumbnailQuery(BaseModel):
 
 @app.post("/query/thumbnail")
 def query_by_thumbnail(query: ThumbnailQuery, authorization: Optional[str] = Header(None)):
-    # All authenticated users can query by thumbnail
     response = table.scan(
         FilterExpression=boto3.dynamodb.conditions.Attr('thumbnail_url').eq(query.thumbnail_url)
     )
@@ -172,9 +165,9 @@ class TagUpdate(BaseModel):
 
 @app.post("/tags")
 def update_tags(update: TagUpdate, authorization: Optional[str] = Header(None)):
-    # All authenticated users can add/remove tags on any file
+    decoded_urls = [unquote_plus(url) for url in update.urls]
     response = table.scan(
-        FilterExpression=boto3.dynamodb.conditions.Attr('file_url').is_in(update.urls)
+        FilterExpression=boto3.dynamodb.conditions.Attr('file_url').is_in(decoded_urls)
     )
     updated = 0
     for item in response['Items']:
@@ -199,12 +192,13 @@ class DeleteRequest(BaseModel):
 
 @app.delete("/delete")
 def delete_files(request: DeleteRequest, authorization: Optional[str] = Header(None)):
-    # Only the owner can delete their own files
     user_id = get_user_id_from_token(authorization)
+    # Decode any URL-encoded URLs (handles spaces encoded as + or %20)
+    decoded_urls = [unquote_plus(url) for url in request.urls]
     s3_client = boto3.client('s3', region_name=os.getenv('AWS_REGION', 'ap-southeast-2'))
 
     response = table.scan(
-        FilterExpression=boto3.dynamodb.conditions.Attr('file_url').is_in(request.urls)
+        FilterExpression=boto3.dynamodb.conditions.Attr('file_url').is_in(decoded_urls)
     )
     if not response['Items']:
         raise HTTPException(status_code=404, detail="No matching files found")
@@ -217,8 +211,8 @@ def delete_files(request: DeleteRequest, authorization: Optional[str] = Header(N
             skipped += 1
             continue
 
-        file_url = item.get('file_url', '')
-        thumbnail_url = item.get('thumbnail_url', '')
+        file_url = item.get('file_url') or ''
+        thumbnail_url = item.get('thumbnail_url') or ''
 
         if file_url.startswith('s3://'):
             parts = file_url.replace('s3://', '').split('/', 1)
@@ -277,9 +271,7 @@ def check_duplicate(request: ChecksumRequest, authorization: Optional[str] = Hea
 
 @app.post("/query/file")
 async def query_by_file(file: UploadFile = File(...), authorization: Optional[str] = Header(None)):
-    # All authenticated users can query by file content
     contents = await file.read()
-
     try:
         s3_client = boto3.client('s3', region_name=os.getenv('AWS_REGION', 'ap-southeast-2'))
         media_bucket = os.getenv('BUCKET_NAME', 'aussie-ecolens-media-940')
