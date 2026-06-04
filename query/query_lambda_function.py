@@ -94,12 +94,10 @@ class TagQuery(BaseModel):
 
 @app.post("/query/tags")
 def query_by_tags(query: TagQuery, authorization: Optional[str] = Header(None)):
-    user_id = get_user_id_from_token(authorization)
+    # All authenticated users can see all files
     response = table.scan()
     results = []
     for item in response['Items']:
-        if user_id and item.get('userId') and item.get('userId') != user_id:
-            continue
         file_tags = item.get('tags', {})
         if all(int(file_tags.get(tag, 0)) >= count
                for tag, count in query.tags.items()):
@@ -107,7 +105,8 @@ def query_by_tags(query: TagQuery, authorization: Optional[str] = Header(None)):
                 "thumbnail_url": item.get("thumbnail_url"),
                 "original_url": item.get("file_url"),
                 "file_type": item.get("file_type"),
-                "tags": fix_decimals(item.get("tags", {}))
+                "tags": fix_decimals(item.get("tags", {})),
+                "uploaded_by": item.get("userId", "unknown"),
             })
     return {"results": fix_decimals(results)}
 
@@ -117,19 +116,18 @@ class SpeciesQuery(BaseModel):
 
 @app.post("/query/species")
 def query_by_species(query: SpeciesQuery, authorization: Optional[str] = Header(None)):
-    user_id = get_user_id_from_token(authorization)
+    # All authenticated users can see all files
     response = table.scan()
     results = []
     for item in response['Items']:
-        if user_id and item.get('userId') and item.get('userId') != user_id:
-            continue
         file_tags = item.get('tags', {})
         if not query.species or query.species == [''] or any(sp in file_tags for sp in query.species if sp):
             results.append({
                 "original_url": item.get("file_url"),
                 "thumbnail_url": item.get("thumbnail_url"),
                 "file_type": item.get("file_type"),
-                "tags": fix_decimals(file_tags)
+                "tags": fix_decimals(file_tags),
+                "uploaded_by": item.get("userId", "unknown"),
             })
     return {"results": results}
 
@@ -139,20 +137,19 @@ class ThumbnailQuery(BaseModel):
 
 @app.post("/query/thumbnail")
 def query_by_thumbnail(query: ThumbnailQuery, authorization: Optional[str] = Header(None)):
-    user_id = get_user_id_from_token(authorization)
+    # All authenticated users can query by thumbnail
     response = table.scan(
         FilterExpression=boto3.dynamodb.conditions.Attr('thumbnail_url').eq(query.thumbnail_url)
     )
     if not response['Items']:
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     item = response['Items'][0]
-    if user_id and item.get('userId') and item.get('userId') != user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
     return {
         "original_url": item.get("file_url"),
         "thumbnail_url": item.get("thumbnail_url"),
         "file_type": item.get("file_type"),
-        "tags": fix_decimals(item.get("tags", {}))
+        "tags": fix_decimals(item.get("tags", {})),
+        "uploaded_by": item.get("userId", "unknown"),
     }
 
 
@@ -163,14 +160,12 @@ class TagUpdate(BaseModel):
 
 @app.post("/tags")
 def update_tags(update: TagUpdate, authorization: Optional[str] = Header(None)):
-    user_id = get_user_id_from_token(authorization)
+    # All authenticated users can add/remove tags on any file
     response = table.scan(
         FilterExpression=boto3.dynamodb.conditions.Attr('file_url').is_in(update.urls)
     )
     updated = 0
     for item in response['Items']:
-        if user_id and item.get('userId') and item.get('userId') != user_id:
-            continue
         current_tags = item.get('tags', {})
         if update.operation == 1:
             for tag in update.tags:
@@ -192,6 +187,7 @@ class DeleteRequest(BaseModel):
 
 @app.delete("/delete")
 def delete_files(request: DeleteRequest, authorization: Optional[str] = Header(None)):
+    # Only the owner can delete their own files
     user_id = get_user_id_from_token(authorization)
     s3_client = boto3.client('s3', region_name=os.getenv('AWS_REGION', 'ap-southeast-2'))
 
@@ -202,9 +198,14 @@ def delete_files(request: DeleteRequest, authorization: Optional[str] = Header(N
         raise HTTPException(status_code=404, detail="No matching files found")
 
     deleted = 0
+    skipped = 0
     for item in response['Items']:
+        # Enforce ownership — only owner can delete
         if user_id and item.get('userId') and item.get('userId') != user_id:
+            logger.warning("User %s tried to delete file owned by %s — skipped", user_id, item.get('userId'))
+            skipped += 1
             continue
+
         file_url = item.get('file_url', '')
         thumbnail_url = item.get('thumbnail_url', '')
 
@@ -224,7 +225,10 @@ def delete_files(request: DeleteRequest, authorization: Optional[str] = Header(N
         table.delete_item(Key={'fileId': item['fileId']})
         deleted += 1
 
-    return {"deleted": deleted}
+    if skipped > 0 and deleted == 0:
+        raise HTTPException(status_code=403, detail="You can only delete files you uploaded.")
+
+    return {"deleted": deleted, "skipped": skipped}
 
 
 class PresignRequest(BaseModel):
@@ -262,7 +266,7 @@ def check_duplicate(request: ChecksumRequest, authorization: Optional[str] = Hea
 
 @app.post("/query/file")
 async def query_by_file(file: UploadFile = File(...), authorization: Optional[str] = Header(None)):
-    user_id = get_user_id_from_token(authorization)
+    # All authenticated users can query by file content
     contents = await file.read()
 
     try:
@@ -305,15 +309,14 @@ async def query_by_file(file: UploadFile = File(...), authorization: Optional[st
         scan_response = table.scan()
         results = []
         for item in scan_response['Items']:
-            if user_id and item.get('userId') and item.get('userId') != user_id:
-                continue
             file_tags = item.get('tags', {})
             if any(sp in file_tags for sp in detected_tags):
                 results.append({
                     "thumbnail_url": item.get("thumbnail_url"),
                     "file_url": item.get("file_url"),
                     "file_type": item.get("file_type"),
-                    "tags": fix_decimals(file_tags)
+                    "tags": fix_decimals(file_tags),
+                    "uploaded_by": item.get("userId", "unknown"),
                 })
 
         return {"results": results, "match_type": "tag-based", "detected_tags": detected_tags}

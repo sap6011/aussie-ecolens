@@ -167,7 +167,7 @@ export default function Upload() {
                 <span style={{ marginLeft: 8, color: 'var(--eco-primary)' }}>Checking for duplicates…</span>
               )}
               {uploadStage === 'uploading' && (
-                <span style={{ marginLeft: 8, color: 'var(--eco-primary)' }}>Uploading to S3…</span>
+                <span style={{ marginLeft: 8, color: 'var(--eco-primary)' }}>Uploading…</span>
               )}
             </div>
           </div>
