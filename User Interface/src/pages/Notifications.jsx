@@ -68,7 +68,7 @@ export default function Notifications() {
       </div>
 
       <div className="alert alert-info">
-        ℹ️ Notifications are sent via AWS SNS. You will receive a confirmation email — please click the link to activate.
+        ℹ️ Notifications are sent via AWS SNS. You will receive a confirmation email please click the link to activate.
       </div>
 
       {alert && <div className="alert alert-success">{alert}</div>}
@@ -90,7 +90,7 @@ export default function Notifications() {
         <div className="notif-card-title">
           Filter by species&nbsp;
           <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--eco-muted)' }}>
-            (optional — leave empty to receive all)
+            (optional, leave empty to receive alerts for all species)
           </span>
         </div>
 
@@ -147,7 +147,7 @@ export default function Notifications() {
 
         {selectedTags.length === 0 && (
           <div style={{ fontSize: 11, color: 'var(--eco-muted)', marginTop: 4 }}>
-            No filter set — you will be notified for every species detected.
+            No filter applied. You will receive alerts for every species detected.
           </div>
         )}
       </div>

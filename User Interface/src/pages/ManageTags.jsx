@@ -222,7 +222,7 @@ export default function ManageTags() {
         </div>
         <div className="mt-hint">
           {selected.length === 0
-            ? '⚠️ No files selected — operation will apply to all files'
+            ? '⚠️ Selecting no files will apply changes to your entire library'
             : `✔ Applying to ${selected.length} selected file(s)`}
         </div>
       </div>

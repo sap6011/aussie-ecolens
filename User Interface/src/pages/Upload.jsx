@@ -142,7 +142,7 @@ export default function Upload() {
         <div className="upload-icon">☁️</div>
         <div className="upload-title">Drop files here or click to browse</div>
         <div className="upload-sub">
-          Supports <strong>JPG, PNG, MP4, MOV</strong> — duplicates detected via checksum
+          Supports <strong>JPG, PNG, MP4, MOV</strong>  
         </div>
       </div>
       <input ref={inputRef} type="file" accept="image/*,video/*" style={{ display: 'none' }} onChange={handleFile} />
