@@ -222,7 +222,7 @@ export default function Query() {
 
         {activeTab === 'file' && (
           <>
-            <div className="query-hint">Upload a file — EcoLens finds all matching files</div>
+            <div className="query-hint">Upload a file : EcoLens finds all matching files</div>
             <div className="query-row">
               <input className="query-input" placeholder="Click to select a file..."
                 value={inputs.file?.name || ''} readOnly onClick={() => fileRef.current.click()}

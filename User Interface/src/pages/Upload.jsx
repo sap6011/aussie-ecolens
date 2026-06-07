@@ -184,7 +184,7 @@ export default function Upload() {
         <div className="how-card">
           <div className="how-icon">📤</div>
           <div className="how-title">1. Upload</div>
-          <div className="how-desc">File stored securely with SHA-256 checksum duplicate detection</div>
+          <div className="how-desc">File stored securely with duplicate detection</div>
         </div>
         <div className="how-card">
           <div className="how-icon">🤖</div>
