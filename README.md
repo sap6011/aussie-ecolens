@@ -107,7 +107,7 @@ The system spans AWS and GCP. You'll need accounts on both, plus the AWS CLI, `g
 ### GCP setup
 
 1. **Cloud Storage** - create a thumbnails bucket with uniform bucket-level access, and grant `allUsers` the Storage Object Viewer role so thumbnails are publicly readable.
-2. **Cloud Run - `query-thumbnail` service** — deploy the FastAPI service from its directory. It validates Cognito JWTs against Cognito's public JWKS and queries DynamoDB directly, so it needs read-only AWS credentials and the User Pool ID as environment variables.
+2. **Cloud Run - `query-thumbnail` service** - deploy the FastAPI service from its directory. It validates Cognito JWTs against Cognito's public JWKS and queries DynamoDB directly, so it needs read-only AWS credentials and the User Pool ID as environment variables.
 3. **Cloud Run - frontend** - set the Cognito IDs, API Gateway base URL, and the `query-thumbnail` URL in the frontend's environment, build the React app, and deploy.
 
 ### Verifying it works
