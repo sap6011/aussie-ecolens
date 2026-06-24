@@ -1,0 +1,5 @@
+INPUT_DIR: "test_images"
+MD_FILE: "mg_detections.json"
+SNIP_DIR: "cropped_images"
+LOWER_CONF: 0.05
+SNIP_SIZE: 600

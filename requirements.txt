@@ -1,0 +1,23 @@
+# AWS SDK
+boto3>=1.34.0
+ 
+# MegaDetector (animal detection)
+megadetector>=1.0.0
+ 
+# PyTorch (SpeciesNet classification)
+torch>=2.0.0
+torchvision>=0.15.0
+ 
+# Model format support
+onnx>=1.14.0
+onnx2torch>=1.5.0
+ 
+# Image processing
+opencv-python>=4.8.0
+Pillow>=10.0.0
+numpy>=1.24.0
+ 
+# Config + utilities
+pyyaml>=6.0
+tqdm>=4.65.0
+matplotlib>=3.7.0

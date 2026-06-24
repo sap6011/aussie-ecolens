@@ -1,0 +1,32 @@
+=== AWS COGNITO ===
+User Pool Name:  AussieEcoLens
+User Pool ID:    us-east-1_4xMmuVjWC
+Client Name:     aussie-ecolens
+Client ID:       5uvau3vaf9vogduhc7rq00mva0
+ARN:             arn:aws:cognito-idp:us-east-1:301949382976:userpool/us-east-1_4xMmuVjWC
+Token URL:       https://cognito-idp.us-east-1.amazonaws.com/us-east-1_4xMmuVjWC/.well-known/jwks.json
+
+=== S3 BUCKETS ===
+Media bucket:    aussie-ecolens-media
+Model bucket:    aussie-ecolens-models
+Region:          us-east-1
+
+=== LAMBDA ===
+Thumbnail ARN:   arn:aws:lambda:us-east-1:301949382976:function:aussie-ecolens-thumbnail
+
+=== LAMBDA ===
+Thumbnail:  arn:aws:lambda:us-east-1:301949382976:function:aussie-ecolens-thumbnail
+Tagger:     arn:aws:lambda:us-east-1:301949382976:function:aussie-ecolens-tagger
+Upload:     arn:aws:lambda:us-east-1:301949382976:function:aussie-ecolens-upload
+
+=== DYNAMODB ===
+Table name: aussie-ecolens-files
+Partition key: fileId
+Region: us-east-1
+
+=== API GATEWAY ===
+API Name: aussie-ecolens-api
+API ID:   1gwype1nc4
+Region:   us-east-1
+
+Layer ARN: arn:aws:lambda:us-east-1:301949382976:layer:opencv-python-headless:1
