@@ -21,9 +21,9 @@ export default function Dashboard({ onUpload }) {
       .then(r => r.json())
       .then(data => {
         const items = data.results || []
-        setFiles(items.slice(0, 8))
-        const images = items.filter(f => !f.file_url?.match(/\.(mp4|mov|avi)$/i)).length
-        const videos = items.length - images
+        setFiles(items)
+        const images = items.filter(f => f.file_type !== "video").length
+        const videos = items.filter(f => f.file_type === "video").length
         const allSpecies = new Set(items.flatMap(f => Object.keys(f.tags || {})))
         setStats({ total: items.length, images, videos, species: allSpecies.size })
       })
@@ -184,10 +184,40 @@ export default function Dashboard({ onUpload }) {
                   <div className="file-name">{name}</div>
                   <div className="file-tags">
                     {tagKeys.length > 0
-                      ? tagKeys.map(t => <span key={t} className="tag-pill" style={{ fontSize: 10, padding: "1px 6px", marginRight: 3 }}>{t}</span>)
+                      ? tagKeys.map(t => <span key={t} className="tag-pill" style={{ fontSize: 10, padding: "1px 6px", marginRight: 3 }}>{t} <strong style={{opacity:0.7}}>×{f.tags[t]}</strong></span>)
                       : <span style={{ color: "var(--eco-muted)", fontSize: 11 }}>No tags yet</span>
                     }
                   </div>
+                  {isVideo && (f.original_url || f.file_url) && (
+                    <div
+                      onClick={async (e) => {
+                        e.stopPropagation()
+                        const token = localStorage.getItem("token")
+                        const res = await fetch(`${API_BASE}/presign`, {
+                          method: "POST",
+                          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+                          body: JSON.stringify({ file_url: f.original_url || f.file_url })
+                        })
+                        const data = await res.json()
+                        if (data.presigned_url) window.open(data.presigned_url, "_blank")
+                      }}
+                      style={{ fontSize: 11, color: "var(--eco-primary)", marginTop: 6, cursor: "pointer", textDecoration: "underline" }}
+                    >
+                      📹 Click to play video
+                    </div>
+                  )}
+                  {!isVideo && thumbSrc && (
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        navigator.clipboard.writeText(thumbSrc)
+                          .then(() => alert("Thumbnail URL copied!"))
+                      }}
+                      style={{ fontSize: 11, color: "var(--eco-primary)", marginTop: 6, cursor: "pointer", textDecoration: "underline" }}
+                    >
+                      📋 Copy thumbnail URL
+                    </div>
+                  )}
                 </div>
               </div>
             )

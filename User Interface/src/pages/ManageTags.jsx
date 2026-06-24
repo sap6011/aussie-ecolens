@@ -276,7 +276,7 @@ export default function ManageTags() {
                 <div className="mt-meta">{f.file_type?.toUpperCase() || 'FILE'}</div>
                 <div>
                   {tags.length > 0
-                    ? tags.map(tag => <span key={tag} className="mt-tag">🏷 {tag}</span>)
+                    ? Object.entries(f.tags || {}).map(([tag, count]) => <span key={tag} className="mt-tag">🏷 {tag} <strong style={{opacity:0.7}}>×{count}</strong></span>)
                     : <span style={{ fontSize: 11, color: 'var(--eco-muted)' }}>No tags</span>
                   }
                 </div>

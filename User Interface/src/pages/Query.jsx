@@ -260,7 +260,9 @@ export default function Query() {
               <div className="result-img" style={{ position: 'relative', overflow: 'hidden' }}>
                 {thumbSrc
                   ? <img src={thumbSrc} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  : "🖼️"}
+                  : (
+                    isVideo ? "🎬" : "🖼️"
+                  )}
                 {!isVideo && (
                   <div className="result-overlay" style={{
                     position: 'absolute', inset: 0,
@@ -272,7 +274,28 @@ export default function Query() {
               </div>
               <div className="result-body">
                 <div className="result-name">{name}</div>
-                <div>{tags.map(t => <span key={t} className="tag-pill">{t}</span>)}</div>
+                <div>{Object.entries(r.tags || {}).map(([t, count]) => <span key={t} className="tag-pill">{t} <strong style={{opacity:0.7}}>×{count}</strong></span>)}</div>
+                {isVideo && fullUrl && (
+                  <div
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      const token = localStorage.getItem('token')
+                      const res = await fetch(`${API_BASE}/presign`, {
+                        method: 'POST',
+                        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ file_url: fullUrl })
+                      })
+                      const data = await res.json()
+                      if (data.presigned_url) window.open(data.presigned_url, '_blank')
+                    }}
+                    style={{
+                      fontSize: 11, color: 'var(--eco-primary)', marginTop: 6,
+                      cursor: 'pointer', textDecoration: 'underline'
+                    }}
+                  >
+                    📹 Click to play video
+                  </div>
+                )}
               </div>
             </div>
           )
