@@ -52,9 +52,9 @@ This was a four-person project. Each member owned a distinct slice end-to-end:
 | Member | Ownership |
 |---|---|
 | **Saptarshi (me)** | AWS Cognito + API Gateway authoriser, all four Lambda execution roles (scoped inline IAM policies), S3 + DynamoDB setup, ECR, cross-cloud JWT validation service on GCP Cloud Run, frontend ↔ backend integration, deployment orchestration |
-| **Krithik** | Tagger Lambda (container image, MegaDetector + SpeciesNet), deduplication logic, Thumbnail Lambda, SNS notifications |
-| **Harshid** | Query Lambda (species, tag-count, file, thumbnail-URL endpoints), tag management and delete APIs |
-| **Neha** | Full React frontend, styling, GCP Cloud Run deployment of the UI |
+| **Member 2** | Tagger Lambda (container image, MegaDetector + SpeciesNet), deduplication logic, Thumbnail Lambda, SNS notifications |
+| **Member 3** | Query Lambda (species, tag-count, file, thumbnail-URL endpoints), tag management and delete APIs |
+| **Member 4** | Full React frontend, styling, GCP Cloud Run deployment of the UI |
 
 The commit history reflects all four contributors.
 
