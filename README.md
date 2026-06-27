@@ -89,7 +89,7 @@ The system spans AWS and GCP. You'll need accounts on both, plus the AWS CLI, `g
 
 ### AWS setup
 
-1. **Cognito** — create a User Pool with email sign-in and a public app client (no secret). Note the User Pool ID and App Client ID.
+1. **Cognito** - create a User Pool with email sign-in and a public app client (no secret). Note the User Pool ID and App Client ID.
 2. **S3** - create a media bucket (with CORS allowing your frontend origin) and a models bucket. Upload the MegaDetector (`mdv5a.pt`) and SpeciesNet (`model.pt`) weights to the models bucket.
 3. **DynamoDB** - create a table with `fileId` as the partition key, plus a Global Secondary Index named `checksum-index` on a `checksum` attribute for deduplication.
 4. **SNS** - create a topic for species notifications; per-tag subscriptions are created dynamically by the backend.
